@@ -198,7 +198,7 @@ class Player:
         
         if self.cooldown == 0:
             # Deafult Zünder auf 
-            Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, 100 )
+            Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, 200 )
 
             self.cooldown += 50
 

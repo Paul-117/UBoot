@@ -1,32 +1,27 @@
-import math
+import matplotlib.pyplot as plt
 import numpy as np
+import threading
+import keyboard
 
 
+while True:
+    b = np.random.uniform(0.1,1)
+    a = np.arange(0,10)
 
-def calculate_r_phi(X,Y,Phi,x,y,u):
 
-    distance = math.sqrt((math.pow(X - x,2)) + (math.pow(Y - y,2)))
-    delta_distance = u
-    dir_x, dir_y = x - X, +(Y - y)
-    angle = ((180 / math.pi) * math.atan2(-dir_y, dir_x)+90-Phi+360)%360
-    #angle = (180 / math.pi) * math.atan2(-dir_y, dir_x)+90-Phi
-    print(angle)
-    if angle > 180:
-        angle = -(360-angle)
+    plt.figure(1)
+    plt.plot(a,a*b)
+
+    plt.figure(2)
+    plt.plot(a,-a*b)
     
-    #delta_angle = math.asin(u/distance)
 
-    return angle
+    plt.pause(0.1)
+    try:  # used try so that if user pressed other than the given key error will not be shown
+        if keyboard.is_pressed('q'):  # if key 'q' is pressed 
+            
+            break  # finishing the loop
+    except:
+        break  # if user pressed a key other than the given key the loop will break    
 
-X = 0
-Y = 0 
-x = -50
-y = -50
-Phi = 0
-
-a = calculate_r_phi(X,Y,Phi,x,y, 100)
-print(a)
-#b = np.arange(0,361,10)
-
-#for i in b:
-#    print(i, calculate_r_phi2(X,Y,i,x,y, 100))
+plt.show()

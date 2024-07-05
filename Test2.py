@@ -1,31 +1,27 @@
-p1 = real_stock_price_volume[:,0]
-v1 = real_stock_price_volume[:,1]
-p2 = predicted_stock_price_volume[:,0]
-v2 = predicted_stock_price_volume[:,1]
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
-plt.figure(1)
-plt.plot(p1, color = 'red', label = 'p1')
-plt.title('Stock Price Prediction')
-plt.xlabel('Time')
-plt.ylabel('Stock Price')
+dx, dv, N, Nb, decp = 2, 1.5, 10, 12, int(1)
 
-plt.figure(2)
-plt.plot(v1, color = 'brown', label = 'v1')
-plt.title('Stock Price Prediction')
-plt.xlabel('Time')
-plt.ylabel('Stock Price')
+Px = np.arange(Nb)
+Pd = np.random.randn(N, Nb)
+Vd = np.random.randn(N, Nb)
 
-plt.figure(3)
-plt.plot(p2, color = 'blue', label = 'p2')
-plt.title('Stock Price Prediction')
-plt.xlabel('Time')
-plt.ylabel('Stock Price')
+fig1, ax1 = plt.subplots(figsize=(8, 6))
 
-plt.figure(4)
-plt.plot(v2, color = 'green', label = 'v2')
-plt.title('Stock Price Prediction')
-plt.xlabel('Time')
-plt.ylabel('Stock Price')
-plt.legend()
+
+def animatex(i):
+    ax1.clear()
+    ax1.bar(Px, Pd[i, :], width=dx / 4, align='edge', color='b')
+anix = FuncAnimation(fig1, animatex, repeat=True, interval=200, frames=N)
+
+fig2, ax2 = plt.subplots(figsize=(8, 6))
+
+
+def animatev(i):
+    ax2.clear()
+    ax2.bar(Px, Vd[i, :], width = dv / 4, align='edge', color='b')
+aniv = FuncAnimation(fig2, animatev, repeat=True, interval=200, frames=N)
 
 plt.show()

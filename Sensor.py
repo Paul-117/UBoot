@@ -3,10 +3,56 @@ import numpy as np
 import scipy.stats as stats
 import math
 import keyboard  # using module keyboard
-
+from matplotlib.animation import FuncAnimation
 
 from scipy.optimize import curve_fit 
 import matplotlib.pyplot as mpl 
+
+
+import socket
+import json
+import time
+import keyboard
+import numpy as np
+
+def get_game_state():
+    HOST = "127.0.0.1"  # Server's IP address
+    PORT = 8080
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((HOST, PORT))
+        command = json.dumps({"type": "get","ID": "Sensorium"}).encode('utf-8')
+        s.sendall(command)
+        data = s.recv(1024)
+        
+        game_state = json.loads(data.decode('utf-8'))
+        #print(f"Current game state: {game_state}")
+        return game_state
+
+def update_game_state(new_state):
+    HOST = "127.0.0.1"  # Server's IP address
+    PORT = 8080
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((HOST, PORT))
+        command = json.dumps({"type": "update","ID": "Sensorium", "data": new_state}).encode('utf-8')
+        s.sendall(command)
+        data = s.recv(1024)
+        
+        print(data.decode('utf-8'))
+### Vereinfachte berechnung ###
+
+def retrieve_xy(x_ship,X,y_ship,Y):
+    # Achtung funktion ist auf 1000m Reichweite ausgelegt 
+    
+    x_relative = X-x_ship
+    y_relative = Y-y_ship
+    r = np.sqrt(x_relative**2+y_relative**2)
+    sigma = 0.05*r
+    x = np.random.normal(loc=X, scale=sigma, size=None)
+    y = np.random.normal(loc=Y, scale=sigma, size=None)
+    print(r,x,y,sigma*5)
+    return x,y,sigma*2
 
 #r = np.sqrt(coordinates[0]**2+coordinates[1]**2)
 
@@ -106,7 +152,6 @@ class Signal:
 
         while len(self.Y_stack) >= self.Average_Spectra:
             self.Y_stack = np.delete(self.Y_stack,0,0)
-
     
 class Plot:
   
@@ -154,7 +199,6 @@ Plot_X = Plot()
 Plot_Y = Plot()
 
 
-
 def check_input():
 
     
@@ -183,7 +227,7 @@ def check_input():
     if keyboard.is_pressed('L'):
             if Signal_Y.Average_Spectra > 1:
                 Signal_Y.Average_Spectra -= 1
-
+ 
 
 
 i = 0
@@ -195,11 +239,27 @@ while True:  # making a loop
     Plot_X.draw_current_Threashold(Signal_X) # the last line is removed within the Method 
     
     i += 1
+    '''
+    if i == 10:
+        game_state = get_game_state()
+        
+
+        new_gamestate = []
+        for j in game_state[1:]: # the last one is the ship position
+            Signal_X.x = j["x"]
+            Signal_Y.x = j["y"]
+            # calculate distance to ship:
+            Signal_X.analyse()
+            Signal_Y.analyse()
+            j = {"Name": "UFO","x_detected": Signal_X.x_retrieved ,  "y_detected": Signal_Y.x_retrieved,"uncertaincy": np.sqrt(Signal_X.x_retrieved_uncertainty**2+Signal_Y.x_retrieved_uncertainty**2)}
+            new_gamestate.append(j)
+
+        update_game_state(new_gamestate)
+    '''
 
     if i == 10:
 
         Plot_X.clear()
-        Signal_X.analyse()
         Plot_X.draw_elvaluation_lines(Signal_X)
         Plot_X.draw_text(Signal_X)
         Plot_X.plot_signal(Signal_X)
@@ -211,7 +271,6 @@ while True:  # making a loop
     if i == 10:
 
         Plot_Y.clear()
-        Signal_Y.analyse()
         Plot_Y.draw_elvaluation_lines(Signal_Y)
         Plot_Y.draw_text(Signal_Y)
         Plot_Y.plot_signal(Signal_Y)
@@ -221,13 +280,13 @@ while True:  # making a loop
         i = 0    
 
     check_input()
-    
 
     try:  # used try so that if user pressed other than the given key error will not be shown
         if keyboard.is_pressed('q'):  # if key 'q' is pressed 
             
             break  # finishing the loop
     except:
-        break  # if user pressed a key other than the given key the loop will break    
-
+        break 
+    
 plt.show()
+

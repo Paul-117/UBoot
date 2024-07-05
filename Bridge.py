@@ -54,11 +54,12 @@ def handle_client(conn, addr):
                 if command["type"] == "get":
                     # Client requested the game state
                     data = []
+                    data.append({"ship_x": ship.x,"ship_y": ship.y})
                     for i in Enemys:
                         extracted = {"Name": i.Name, "x": i.x, "y": i.y, 'phi': i.phi}
                         data.append(extracted)
                         print(extracted)
-                    data.append({"ship_x": ship.x,"ship_y": ship.y})
+                    
                     response = json.dumps(data).encode('utf-8')
                     conn.sendall(response)
 
@@ -71,12 +72,13 @@ def handle_client(conn, addr):
                         j.x_detected = command["data"][i]["x_detected"]
                         j.y_detected = command["data"][i]["y_detected"]
                         j.uncertaincy = command["data"][i]["uncertaincy"]
-                        new = detection(j.x_detected,j.y_detected,j.uncertaincy,100)
-                        detections.append(new)
+                        if j.x_detected != None and j.y_detected != None and j.uncertaincy != None:
+                            new = detection(j.x_detected,j.y_detected,j.uncertaincy,100)
+                            detections.append(new)
                         #drawShip_detected(j)
                         #drawShip_detected_legacy(j)
-                        print("X", j.x-j.x_detected)
-                        print("Y", j.y-j.y_detected)
+                        #print("X", j.x-j.x_detected)
+                        #print("Y", j.y-j.y_detected)
                         i +=1
       
                 conn.sendall(b"Update successful")
@@ -163,7 +165,7 @@ class Player:
                 self.ruder -= 3 # Kleine Korrektur düsen damit das schiff nicht bewegungsunfähig bleibt 
         if keys[pygame.K_UP]:
             if self.schub < 100:
-                self.schub += 1
+                self.schub += 10
             self.a = self.acceleration()
         elif keys[pygame.K_DOWN]:
             if self.schub > -100:

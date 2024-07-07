@@ -1,38 +1,59 @@
-from datetime import datetime
-from matplotlib import pyplot
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.stats as stats
+import math
+import keyboard  # using module keyboard
 from matplotlib.animation import FuncAnimation
-from random import randrange
 
-x_data, y_data = [], []
+from scipy.optimize import curve_fit 
+import matplotlib.pyplot as mpl 
 
-figure = pyplot.figure()
-line, = pyplot.plot_date(x_data, y_data, '-')
-
-def update(frame):
-    x_data.append(datetime.now())
-    y_data.append(randrange(0, 100))
-    line.set_data(x_data, y_data)
-    figure.gca().relim()
-    figure.gca().autoscale_view()
-    return line,
-
-animation = FuncAnimation(figure, update, interval=200)
+import time, threading
+import socket
+import json
+import time
+import keyboard
+import numpy as np
 
 
+def calculate_r_phi(X,Y,Phi,x,y):
 
-x_data, y_data = [], []
+    distance = math.sqrt((math.pow(X - x,2)) + (math.pow(Y - y,2)))
+    
+    dir_x, dir_y = x - X, +(Y - y)
+    angle = ((180 / math.pi) * math.atan2(-dir_y, dir_x)-Phi+360)%360
 
-figure2 = pyplot.figure()
-line, = pyplot.plot_date(x_data, y_data, '-')
+    if angle > 180:
+        angle = -(360-angle)
+    
 
-def update2(frame):
-    x_data.append(datetime.now())
-    y_data.append(randrange(0, 100))
-    line.set_data(x_data, y_data)
-    figure2.gca().relim()
-    figure2.gca().autoscale_view()
-    return line,
+    return distance, angle
 
-animation = FuncAnimation(figure2, update2, interval=200)
+def pol2cart(X,Y,d, phi):
 
-pyplot.show()
+    x = X + d * np.sin(math.radians(phi))
+    y = Y + d * np.cos(math.radians(phi))
+    return x, y
+
+
+a = [-10,0,10]
+b = [-10,0,10]
+X = 0 
+Y = 0 
+
+'''for i in a:
+    for j in b:
+        d,phi = calculate_r_phi(X,Y,0,i,j)
+        plt.scatter(i,j, color = "red")
+        x,y = pol2cart(X,Y,d,phi)
+        plt.scatter(x,y, color = "blue")
+        
+
+plt.show()'''
+x = 0
+y = -10
+d,phi = calculate_r_phi(X,Y,0,x,y)
+print(d,phi)
+x,y = pol2cart(X,Y,d,phi)
+print(x,y)
+print(np.sin(math.radians(-90)))

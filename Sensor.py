@@ -8,7 +8,7 @@ from matplotlib.animation import FuncAnimation
 from scipy.optimize import curve_fit 
 import matplotlib.pyplot as mpl 
 
-
+import time, threading
 import socket
 import json
 import time
@@ -39,8 +39,7 @@ def update_game_state(new_state):
         s.sendall(command)
         data = s.recv(1024)
         
-        print(data.decode('utf-8'))
-### Vereinfachte berechnung ###
+        #print(data.decode('utf-8'))
 
 def retrieve_xy(x_ship,X,y_ship,Y):
     # Achtung funktion ist auf 1000m Reichweite ausgelegt 
@@ -56,11 +55,31 @@ def retrieve_xy(x_ship,X,y_ship,Y):
 
 #r = np.sqrt(coordinates[0]**2+coordinates[1]**2)
 
+def calculate_r_phi(X,Y,x,y):
+
+    distance = math.sqrt((math.pow(X - x,2)) + (math.pow(Y - y,2)))
+    dir_x, dir_y = x - X, +(Y - y)
+    angle = ((180 / math.pi) * math.atan2(-dir_y, dir_x)+90+360)%360
+
+    if angle > 180:
+        angle = -(360-angle)
+    
+    return distance, angle 
+def pol2cart(X,Y,d, phi):
+
+    x = X + d * np.sin(math.radians(phi))
+    y = Y - d * np.cos(math.radians(phi))
+    return(x, y)
 class Signal:
   
-    def __init__(self,x,r):
+    def __init__(self,name,x,r):
 
-        self.X = 1000
+        if name =="distance":
+            self.X = 500
+        if name == "phi": #später statt von 0-360 0 in die mitte und +-180 hnter dem schiff ist das ende des sensors 
+
+            self.X = 360
+        self.name = name
         self.Y = np.zeros(self.X)
         self.Y_stack = np.zeros(self.X)
         self.Y_mean = np.zeros(self.X)
@@ -72,10 +91,24 @@ class Signal:
         self.num_of_Gaussians = 3
         self.I = 0
         self.Sigma = 0
-        self.Threashold = 1
         self.x_retrieve_start = 0
+        self.x_retrieved = None
         self.x_retrieve_end = 0 
         self.x_retrieved_uncertainty = 0
+        # Plotting
+        self.fig, self.ax = plt.subplots(figsize = (5,4))
+        if self.name == "phi":
+             self.line, = self.ax.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
+        else:
+             self.line, = self.ax.plot(np.arange(0, self.X), self.Y_mean,color='black')
+        self.threshold_line_h = self.ax.axhline(self.Threashold, color='red', linestyle='--')
+        self.threshold_line_vl = self.ax.axvline(self.x_retrieve_start, color="red")
+        self.threshold_line_vr = self.ax.axvline(self.x_retrieve_end, color="red")
+        self.text_x_retrieved = self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=12)
+        self.text_average_spectra = self.ax.text(0.1, 0.85, "", transform=self.ax.transAxes, fontsize=12)
+        self.ax.set_ylim(-0.5, 3)
+        
+        # Calculations
         self.get_I()
         self.get_Sigma()
         print(self.I,self.Sigma)
@@ -86,7 +119,7 @@ class Signal:
     def get_I(self):
 
         if self.r < 500:
-            self.I = -self.r*0.001*self.Noise+ 10*self.Noise
+            self.I = 2#-self.r*0.001*self.Noise+ 10*self.Noise
         else:
             self.I = 0 
 
@@ -115,8 +148,10 @@ class Signal:
             I_local = np.random.uniform(0.1,1)* self.I
             sigma_local = np.random.uniform(0.1*self.Sigma,0.3*self.Sigma)
             x_local = np.random.normal(self.x,self.Sigma*1.5)
-            
-            Y_local = self.add_Gaussian(np.arange(self.X),x_local,I_local,sigma_local)
+            if self.name == "phi":
+                Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2),x_local,I_local,sigma_local)
+            else:
+                Y_local = self.add_Gaussian(np.arange(self.X),x_local,I_local,sigma_local)
             Y_stack = np.vstack([Y_stack,Y_local])
 
             i += 1
@@ -124,13 +159,17 @@ class Signal:
         self.Y += Y_stack[1:].sum(axis = 0)
 
     def fuck(self):
-
+        self.get_I()
         self.add_Noise()
         self.add_multiple_Gaussians()
     
     def unfuck(self):
 
-        X_above_Threashold = np.arange(0,self.X)[self.Y_mean > self.Threashold]
+        if self.name == "phi":
+            X_above_Threashold = np.arange(-self.X/2,self.X/2)[self.Y_mean > self.Threashold]
+        else:
+            X_above_Threashold = np.arange(0,self.X)[self.Y_mean > self.Threashold]
+        
         
         if len(X_above_Threashold > 2):
 
@@ -153,140 +192,112 @@ class Signal:
         while len(self.Y_stack) >= self.Average_Spectra:
             self.Y_stack = np.delete(self.Y_stack,0,0)
     
-class Plot:
-  
-    def __init__(self):
-             
-        self.ylim = -0.5,3
-        self.line = plt.axhline(Signal_X.Threashold, color = "red",linestyle='dashed')
+    def plot(self):
+        return self.fig, self.ax
 
-    def draw_current_Threashold(self,signal):
-        
-        self.line.remove()
-        self.line = plt.axhline(signal.Threashold, color = "red",linestyle='dashed')
 
-    def draw_elvaluation_lines(self,signal):
-        
-        plt.axhline(signal.Threashold, color = "red")
-        plt.axvline(signal.x_retrieve_start, color = "red")
-        plt.axvline(signal.x_retrieve_end, color = "red")
-
-    def draw_text(self,signal):
-
-        if signal.x_retrieved == None:
-            plt.text(0.1,3.1," X: "+ "failed", fontsize=12) 
+    def update(self, frame):
+        self.line.set_ydata(self.Y_mean)
+        self.threshold_line_h.set_ydata([self.Threashold, self.Threashold])
+        self.threshold_line_vl.set_xdata([self.x_retrieve_start, self.x_retrieve_start])
+        self.threshold_line_vr.set_xdata([self.x_retrieve_end, self.x_retrieve_end])
+        if self.x_retrieved is None:
+            self.text_x_retrieved.set_text("X: failed")
         else:
-            plt.text(0.1,3.1," X: "+ str(int(signal.x_retrieved))+" +- "+str(int(signal.x_retrieved_uncertainty)), fontsize=12) 
-            #print(coordinates[0]-x_retrieved)
-        
-        plt.text(0.1,3.3," Average over : "  + str(int(signal.Average_Spectra)) + " Spectra", fontsize=12) 
-
-    def plot_signal(self,signal):
-        plt.ylim(self.ylim)
-        plt.plot(np.arange(0,signal.X),signal.Y_mean, color = "black")
-
-    def pause(self):
-        plt.pause(0.01)
-
-    def clear(self):
-        plt.clf()
-
-
-Signal_X = Signal(450,450)
-Signal_Y = Signal(300,200)
-
-Plot_X = Plot()
-Plot_Y = Plot()
-
+            self.text_x_retrieved.set_text(f"X: {int(self.x_retrieved)} +- {int(self.x_retrieved_uncertainty)}")
+        self.text_average_spectra.set_text(f"Average over: {int(self.Average_Spectra)} Spectra")
+        return self.line, self.threshold_line_h, self.threshold_line_vl, self.threshold_line_vr, self.text_x_retrieved, self.text_average_spectra
 
 def check_input():
-
+    global running 
     
-    if keyboard.is_pressed('up'):
+    if keyboard.is_pressed('y'):
             Signal_X.Threashold += 0.03
     
-    if keyboard.is_pressed('down'):
+    if keyboard.is_pressed('x'):
             Signal_X.Threashold -= 0.03
     
-    if keyboard.is_pressed('right'):
+    if keyboard.is_pressed('u'):
             Signal_X.Average_Spectra += 1
     
-    if keyboard.is_pressed('left'):
+    if keyboard.is_pressed('l'):
             if Signal_X.Average_Spectra > 1:
                 Signal_X.Average_Spectra -= 1
     
-    if keyboard.is_pressed('P'):
+    if keyboard.is_pressed('n'):
             Signal_Y.Threashold += 0.03
     
-    if keyboard.is_pressed('Ö'):
+    if keyboard.is_pressed('m'):
             Signal_Y.Threashold -= 0.03
 
-    if keyboard.is_pressed('Ä'):
+    if keyboard.is_pressed('o'):
             Signal_Y.Average_Spectra += 1
     
-    if keyboard.is_pressed('L'):
+    if keyboard.is_pressed('l'):
             if Signal_Y.Average_Spectra > 1:
                 Signal_Y.Average_Spectra -= 1
+    
+    if keyboard.is_pressed('q'):
+        running = False
+
+    if running == True:
+         threading.Timer(0.01, check_input).start()
  
 
-
-i = 0
-while True:  # making a loop
-    
-    # Plot X
-    plt.figure(1)
-    Plot_X.pause()
-    Plot_X.draw_current_Threashold(Signal_X) # the last line is removed within the Method 
-    
-    i += 1
-    '''
-    if i == 10:
-        game_state = get_game_state()
+def get_and_send_Positions():
+    global running 
+    game_state = get_game_state()
+    X = game_state[0]["ship_x"]
+    Y = game_state[0]["ship_x"]
+    new_gamestate = []
+    for j in game_state[1:]: # the first one is the ship position
+        # x,y --> d,phi
         
+        d, phi = calculate_r_phi(X,Y,j["x"],j["y"])
+        Signal_X.x = d
+        Signal_Y.x = phi
+        print("Phi: ", phi," D: ",d)
+        #print("Phi: ",int(phi))
+        #print("d ",int(d))
+        # Retrieve x and y:
+        Signal_X.analyse()
+        Signal_Y.analyse()
+        if Signal_X.x_retrieved != None and Signal_Y.x_retrieved != None:
+             
+            x_retrieved, y_retrieved = pol2cart(X,Y,Signal_X.x_retrieved,Signal_Y.x_retrieved)
+            print(j["x"], x_retrieved)
+            print(j["y"], y_retrieved)
+        
+        
+        # Rücktransformation:
+        if Signal_X.x_retrieved != None and Signal_Y.x_retrieved != None:
+            x_retrieved, y_retrieved = pol2cart(X,Y,Signal_X.x_retrieved,Signal_Y.x_retrieved)
 
-        new_gamestate = []
-        for j in game_state[1:]: # the last one is the ship position
-            Signal_X.x = j["x"]
-            Signal_Y.x = j["y"]
-            # calculate distance to ship:
-            Signal_X.analyse()
-            Signal_Y.analyse()
-            j = {"Name": "UFO","x_detected": Signal_X.x_retrieved ,  "y_detected": Signal_Y.x_retrieved,"uncertaincy": np.sqrt(Signal_X.x_retrieved_uncertainty**2+Signal_Y.x_retrieved_uncertainty**2)}
+            j = {"Name": "UFO","x_detected": x_retrieved ,  "y_detected": y_retrieved,"uncertaincy": np.sqrt(Signal_X.x_retrieved_uncertainty**2+Signal_Y.x_retrieved_uncertainty**2)}
             new_gamestate.append(j)
+        
+    update_game_state(new_gamestate)
 
-        update_game_state(new_gamestate)
-    '''
+    if running == True:
+         threading.Timer(1, get_and_send_Positions).start()
 
-    if i == 10:
+     
 
-        Plot_X.clear()
-        Plot_X.draw_elvaluation_lines(Signal_X)
-        Plot_X.draw_text(Signal_X)
-        Plot_X.plot_signal(Signal_X)
-
-    # Plot Y 
-    plt.figure(2)
-    Plot_Y.draw_current_Threashold(Signal_Y) # the last line is removed within the Method 
-
-    if i == 10:
-
-        Plot_Y.clear()
-        Plot_Y.draw_elvaluation_lines(Signal_Y)
-        Plot_Y.draw_text(Signal_Y)
-        Plot_Y.plot_signal(Signal_Y)
+Signal_X = Signal("distance",300,100)
+Signal_Y = Signal("phi",-80,100)
+running = True
+# get input every n seconds
+threading.Timer(0.1, get_and_send_Positions).start()
+# check Input
+threading.Timer(0.01, check_input).start()
 
 
-    if i == 10:
-        i = 0    
 
-    check_input()
 
-    try:  # used try so that if user pressed other than the given key error will not be shown
-        if keyboard.is_pressed('q'):  # if key 'q' is pressed 
-            
-            break  # finishing the loop
-    except:
-        break 
-    
+ani_x = FuncAnimation(Signal_X.fig, Signal_X.update, frames=100, blit=True, interval=100)
+ani_y = FuncAnimation(Signal_Y.fig, Signal_Y.update, frames=100, blit=True, interval=100)
 plt.show()
+
+    
+
 

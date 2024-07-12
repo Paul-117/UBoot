@@ -20,12 +20,13 @@ def handle_client(conn, addr):
     try:
         while True:
             data = conn.recv(1024)
+            print("data recieved: ", data )
             if not data:
+                print("break")
                 break
 
             # Decode received data
             command = json.loads(data.decode('utf-8'))
-            print("connected")
 
             if command["ID"] == "Infoscreen1":
 
@@ -80,14 +81,13 @@ def handle_client(conn, addr):
                         #print("X", j.x-j.x_detected)
                         #print("Y", j.y-j.y_detected)
                         i +=1
-      
-                conn.sendall(b"Update successful")
+                #conn.sendall(b"Update successful")
 
-        
-       
+
     except ConnectionResetError:
         print(f"Connection with {addr} was reset.")
     finally:
+        print("Connection closed")
         conn.close()
 
 def server_program():

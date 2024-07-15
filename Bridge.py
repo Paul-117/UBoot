@@ -67,22 +67,13 @@ def handle_client(conn, addr):
 
                 elif command["type"] == "update":
                     # Client wants to update the game state
-                    i = 0
-                    for j in Enemys: 
-                        #print(command['data'])
-                        j.x_detected = command["data"][i]["x_detected"]
-                        j.y_detected = command["data"][i]["y_detected"]
-                        j.uncertaincy = command["data"][i]["uncertaincy"]
-                        if j.x_detected != None and j.y_detected != None and j.uncertaincy != None:
-                            new = detection(j.x_detected,j.y_detected,j.uncertaincy,100)
-                            detections.append(new)
-                        #drawShip_detected(j)
-                        #drawShip_detected_legacy(j)
-                        #print("X", j.x-j.x_detected)
-                        #print("Y", j.y-j.y_detected)
-                        i +=1
-                #conn.sendall(b"Update successful")
-
+                    x = command["data"]["x"]
+                    y = command["data"]["y"]
+                    u = command["data"]["uncertainty"] # Sind jeweils [int, int,...]
+                    
+                    for i in range(len(x)):
+                        new = detection(x[i],y[i],u[i],100)
+                        detections.append(new)
 
     except ConnectionResetError:
         print(f"Connection with {addr} was reset.")
@@ -385,8 +376,8 @@ class Enemy:
         #self.y = y 
         r = 400
         phi = np.random.uniform(0, 360)
-        x = ship.x + r*math.sin(math.radians(phi))
-        y = ship.y + r*math.cos(math.radians(phi))
+        x = x#ship.x + r*math.sin(math.radians(phi))
+        y = y#ship.y + r*math.cos(math.radians(phi))
         self.x = x
         self.y = y
         self.phi = phi
@@ -481,7 +472,8 @@ detections = []
 ship = Player('Player','data/Uboot.png', 100,0,0, 0,0,(10,40),None,None,None,None)
 
 # enemy 
-enemy = Enemy('Enemy','data/Uboot2.png',100, 0,-300, 0,(0.01,0),(10,40),None,None,None,None)
+enemy = Enemy('Enemy','data/Uboot2.png',100, 0,100, 0,(0.01,0),(10,40),None,None,None,None)
+enemy2 = Enemy('Enemy2','data/Uboot2.png',100, -200,300, 0,(0.01,0),(10,40),None,None,None,None)
 
 ### Game Loop ###
 

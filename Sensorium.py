@@ -89,14 +89,14 @@ class Signal:
         self.Y = np.zeros(self.X)
         self.Y_stack = np.zeros(self.X)
         self.Y_mean = np.zeros(self.X)
-        self.x = [x]
-        self.r = [r]
+        self.x = x
+        self.r = r
         self.Threashold = 0
         self.Average_Spectra = 1
         self.Noise = 0.1
         self.num_of_Gaussians = 3
-        self.I = []
-        self.Sigma = []
+        self.I = 0
+        self.Sigma = 0
         self.x_retrieve_start = 0
         self.x_retrieved = None
         self.x_retrieve_end = 0 
@@ -124,17 +124,17 @@ class Signal:
 
     def get_I(self):
 
-        for r in self.r:
-            if r < 500:
-                self.I.append(2)#= 2#-self.r*0.001*self.Noise+ 10*self.Noise
-            else:
-                self.I.append(0)# = 0 
-    
-    def get_Sigma(self):
-        
-        for r in self.r:
+        self.I = 0 
 
-            self.Sigma.append(0.05*r) 
+        if self.r < 500:
+            self.I = 2#-self.r*0.001*self.Noise+ 10*self.Noise
+        else:
+            self.I = 0 
+
+    def get_Sigma(self):
+        self.Sigma = 0 
+
+        self.Sigma = 0.05*self.r 
 
     def reset_Y(self):
         self.Y = np.zeros(self.X)
@@ -144,12 +144,14 @@ class Signal:
         self.Y += np.random.normal(0,self.Noise,self.X)
 
     def add_Gaussian(self,X,x,I,sigma):
-
+        print("add Gaussian called")
+        print("Parameters for Gaussian: ", X,x,I,sigma)
         Y = I*(2.5*sigma)*stats.norm.pdf(X, x, sigma)
-
+        print("Gaussian Response", Y)
+        
         return Y
 
-    def add_multiple_Gaussians_old(self):
+    def add_multiple_Gaussians(self):
     
         Y_stack = np.zeros(self.X)
         i = 0 
@@ -162,33 +164,18 @@ class Signal:
             else:
                 Y_local = self.add_Gaussian(np.arange(self.X),x_local,I_local,sigma_local)
             Y_stack = np.vstack([Y_stack,Y_local])
-
+            print(I_local,sigma_local,x_local)
             i += 1
 
         self.Y += Y_stack[1:].sum(axis = 0)
-
-    def add_multiple_Gaussians(self):
-        Y_stack = np.zeros(self.X)
-        i = 0 
-        while i < self.num_of_Gaussians:
-            print(self.x, self.I, self.Sigma)
-            for x, I, sigma in zip(self.x, self.I, self.Sigma):
-                I_local = np.random.uniform(0.1, 1) * I
-                sigma_local = np.random.uniform(0.1 * sigma, 0.3 * sigma)
-                x_local = np.random.normal(x, sigma * 1.5)
-                if self.name == "phi":
-                    Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
-                else:
-                    Y_local = self.add_Gaussian(np.arange(self.X), x_local, I_local, sigma_local)
-                Y_stack += Y_local
-            i += 1 
-
-        self.Y += Y_stack[1:].sum(axis = 0)
+        print(self.Y)
 
     def fuck(self):
         self.get_I()
+        self.get_Sigma()
         self.add_Noise()
         self.add_multiple_Gaussians()
+        #print(self.Y_mean)
     
     def unfuck(self):
 
@@ -222,7 +209,6 @@ class Signal:
     def plot(self):
         return self.fig, self.ax
 
-
     def update(self, frame):
         self.line.set_ydata(self.Y_mean)
         self.threshold_line_h.set_ydata([self.Threashold, self.Threashold])
@@ -244,10 +230,10 @@ def check_input():
     if keyboard.is_pressed('x'):
             Signal_X.Threashold -= 0.03
     
-    if keyboard.is_pressed('c'):
+    if keyboard.is_pressed('u'):
             Signal_X.Average_Spectra += 1
     
-    if keyboard.is_pressed('v'):
+    if keyboard.is_pressed('l'):
             if Signal_X.Average_Spectra > 1:
                 Signal_X.Average_Spectra -= 1
     
@@ -257,10 +243,10 @@ def check_input():
     if keyboard.is_pressed('m'):
             Signal_Y.Threashold -= 0.03
 
-    if keyboard.is_pressed('c'):
+    if keyboard.is_pressed('o'):
             Signal_Y.Average_Spectra += 1
     
-    if keyboard.is_pressed('v'):
+    if keyboard.is_pressed('l'):
             if Signal_Y.Average_Spectra > 1:
                 Signal_Y.Average_Spectra -= 1
     
@@ -312,8 +298,8 @@ def test():
     global running 
 
 
-    Signal_X.x = 300
-    Signal_Y.x = 110
+    Signal_X.x = [300]
+    Signal_Y.x = [110]
     
     Signal_X.analyse()
     Signal_Y.analyse()
@@ -321,6 +307,7 @@ def test():
 
     if running == True:
          threading.Timer(1, test).start()
+     
 
 Signal_X = Signal("distance",300,100)
 Signal_Y = Signal("phi",-80,100)
@@ -329,6 +316,9 @@ running = True
 threading.Timer(0.1, test).start()
 # check Input
 threading.Timer(0.01, check_input).start()
+
+
+
 
 ani_x = FuncAnimation(Signal_X.fig, Signal_X.update, frames=100, blit=True, interval=100)
 ani_y = FuncAnimation(Signal_Y.fig, Signal_Y.update, frames=100, blit=True, interval=100)

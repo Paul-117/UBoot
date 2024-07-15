@@ -254,9 +254,17 @@ class Signal:
     def update(self, frame):
 
 
+         # Example of adding lines conditionally
+        if frame % 10 == 0:  # Add a horizontal line every 10 frames
+            y_position = np.random.uniform(0, 3)  # Example: random y position
+            self.add_horizontal_line(y_position)
+
+        # Example of removing lines conditionally
+        if len(self.horizontal_lines) > 5:  # Remove excess horizontal lines
+            line_to_remove = self.horizontal_lines.pop(0)  # Remove the first line
+            line_to_remove.remove()
 
 
-        
         self.line.set_ydata(self.Y_mean)
         #print(self.Y_mean)
         self.threshold_line_h.set_ydata([self.Threashold, self.Threashold])

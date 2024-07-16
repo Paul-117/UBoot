@@ -1,30 +1,27 @@
 import numpy as np
 import math 
+import matplotlib.pyplot as plt
 
-def calculate_r_phi(X,Y,x,y):
+Above_Threashold_Regions = [[1,2,3],[8,9,10,11,12]]
+print(Above_Threashold_Regions[0])
+X = np.arange(100)
+Y = np.zeros(100)
+d = 100 
 
-    distance = math.sqrt((math.pow(X - x,2)) + (math.pow(Y - y,2)))
-    dir_x, dir_y = x - X, +(Y - y)
-    angle = ((180 / math.pi) * math.atan2(-dir_y, dir_x)+90+360)%360
+def fuck_d(d):
+    delta_d = d*0.1
+    d_fucked = d + np.random.uniform(-delta_d, delta_d)
 
-    if angle > 180:
-        angle = -(360-angle)
-    
-    return distance, angle 
+    return d_fucked
 
-def pol2cart(X,Y,d, phi):
+for region in Above_Threashold_Regions:
+    d_fucked = fuck_d(d)
+    Y[region] += d_fucked + np.random.normal(0,d*0.1,len(Y[region]))
 
-    x = X + d * np.sin(math.radians(phi))
-    y = Y - d * np.cos(math.radians(phi))
-    return(int(x), int(y))
+    d_retrieved = np.mean(Y[region])
+    print(d_retrieved)
 
-ship_x = -133.382
-ship_y = -112.456
 
-x = -18.597
-y = -164.24
+plt.plot(X,Y)
+plt.show()
 
-r, phi = calculate_r_phi(ship_x,ship_y,x,y)
-print(r,phi)
-x,y = pol2cart(ship_x,ship_y,r,phi)
-print(x,y)

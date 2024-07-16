@@ -79,21 +79,21 @@ class Signal:
   
     def __init__(self,name,x,r):
 
-        if name =="distance":
-            self.X = 500
-        if name == "phi": #später statt von 0-360 0 in die mitte und +-180 hnter dem schiff ist das ende des sensors 
 
-            self.X = 360
+        self.X = 360
         self.name = name
         self.Y = np.zeros(self.X)
         self.Y_stack = np.zeros(self.X)
         self.Y_mean = np.zeros(self.X)
+        self.D = np.zeros(self.X)
+        self.D_stack = np.zeros(self.X)
+        self.D_mean = np.zeros(self.X)
         self.x = []
         self.r = r
         self.Threashold = 1
         self.Average_Spectra = 1
         self.Noise = 0.1
-        self.num_of_Gaussians = 1
+        self.num_of_Gaussians = 3
         self.I = []
         self.Sigma = []
         self.x_retrieve_start = 0
@@ -106,17 +106,18 @@ class Signal:
         
         # Plotting
         self.fig, self.ax = plt.subplots(figsize = (5,4))
+        self.fig_D, self.ax_D = plt.subplots(figsize = (5,4))
+        
         self.horizontal_line = self.ax.axhline(self.Threashold, color='red', linestyle='--') # We only need one 
         self.vertical_lines = []
 
-        if self.name == "phi":
-             self.line, = self.ax.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
-        else:
-             self.line, = self.ax.plot(np.arange(0, self.X), self.Y_mean,color='black')
-        
+
+        self.line, = self.ax.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
+        self.line_D, = self.ax_D.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
         self.text_x_retrieved = self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=12)
         self.text_average_spectra = self.ax.text(0.1, 0.85, "", transform=self.ax.transAxes, fontsize=12)
         self.ax.set_ylim(-0.5, 3)
+        self.ax_D.set_ylim(-0.5, 500)
         
         # Calculations
         self.get_I()
@@ -131,7 +132,7 @@ class Signal:
         
         for r in self.r:
             if r < 500:
-                self.I.append(3)#= 2#-self.r*0.001*self.Noise+ 10*self.Noise
+                self.I.append(7)#= 2#-self.r*0.001*self.Noise+ 10*self.Noise
                 
             else:
                 self.I.append(0)# = 0 
@@ -140,7 +141,7 @@ class Signal:
         self.Sigma = []
         for r in self.r:
 
-            self.Sigma.append(0.01*r) 
+            self.Sigma.append(0.1*r) 
 
     def reset_Y(self):
         self.Y = np.zeros(self.X)
@@ -182,11 +183,17 @@ class Signal:
 
         self.Y += Y_stack[1:].sum(axis = 0)
 
+    def fuck_d(self,d):
+
+        delta_d = d*0.1
+        d_fucked = d + np.random.uniform(-delta_d, delta_d)
+
+        return d_fucked
+
     def fuck(self):
         self.get_I()
         self.get_Sigma()
-        
-        #self.add_Noise()
+        self.add_Noise()
         self.add_multiple_Gaussians()
     
     def unfuck(self):
@@ -194,11 +201,10 @@ class Signal:
         self.x_retrieved = []
         self.x_retrieved_uncertainty = []
         self.Above_Threashold_Regions = []
+        self.D = np.zeros(self.X)
 
-        if self.name == "phi":
-            X_above_Threashold = np.arange(-self.X/2,self.X/2)[self.Y_mean > self.Threashold]
-        else:
-            X_above_Threashold = np.arange(0,self.X)[self.Y_mean > self.Threashold]
+
+        X_above_Threashold = np.arange(-self.X/2,self.X/2)[self.Y_mean > self.Threashold]
         
         jump_indices = np.where(np.diff(X_above_Threashold) > 10 )[0]
         # Split the array at the jumps
@@ -208,6 +214,12 @@ class Signal:
             if len(region) > 0:
                 self.x_retrieved.append(region[0] + (region[-1] - region[0] )/2 )
                 self.x_retrieved_uncertainty.append( region[-1] - region[0] )
+                # Add the region to self.D
+                # später richtiges d zur richtigen region zuweisen 
+                d = 100
+                d_fucked = self.fuck_d(d)
+                region = region.astype(int)
+                self.D[region] = d_fucked + np.random.normal(0,d*0.1,len(region))
 
     def analyse(self):
         print(self.name)
@@ -250,6 +262,8 @@ class Signal:
 
         # Signal updaten 
         self.line.set_ydata(self.Y_mean)
+        # Signal D updaten 
+        
 
         '''
         string = ""
@@ -266,26 +280,32 @@ class Signal:
         # Combine single artist with the list of lines 
         return [self.line, self.horizontal_line, self.text_average_spectra] + self.vertical_lines
     
+    def update_D(self, frame):
+
+        self.line_D.set_ydata(self.D)
+
+        return [self.line_D]
+
 def check_input():
     global running 
     
     if keyboard.is_pressed('y'):
             Signal_X.Threashold += 0.01
-            Signal_Y.Threashold += 0.01
+            #Signal_Y.Threashold += 0.01
     
     if keyboard.is_pressed('x'):
             Signal_X.Threashold -= 0.01
-            Signal_Y.Threashold -= 0.01
+            #Signal_Y.Threashold -= 0.01
     
     if keyboard.is_pressed('c'):
             Signal_X.Average_Spectra += 1
-            Signal_Y.Average_Spectra += 1
+            #Signal_Y.Average_Spectra += 1
     if keyboard.is_pressed('v'):
             
             if Signal_X.Average_Spectra > 1:
                 Signal_X.Average_Spectra -= 1
-            if Signal_Y.Average_Spectra > 1:
-                Signal_Y.Average_Spectra -= 1
+            #if Signal_Y.Average_Spectra > 1:
+            #    Signal_Y.Average_Spectra -= 1
         
     if keyboard.is_pressed('q'):
         running = False
@@ -343,14 +363,14 @@ data.append({"ship_x": 0,"ship_y": 0})
 
 extracted = {"Name": "enemy1", "x": 150, "y": 100}
 data.append(extracted)
-
+'''
 extracted = {"Name": "enemy2", "x": 50, "y": -100}
 data.append(extracted)
 extracted = {"Name": "enemy2", "x": 300, "y": 0}
 data.append(extracted)
 extracted = {"Name": "enemy2", "x": -300, "y": 300}
 data.append(extracted)
-
+'''
 response = json.dumps(data).encode('utf-8')
 game_state = json.loads(response.decode('utf-8'))
 
@@ -361,25 +381,25 @@ def test():
     Y = game_state[0]["ship_y"]
     response = {"x": [], "y": [], "uncertainty": []}
     Signal_X.x = []
-    Signal_Y.x = []
     Signal_X.r = []
-    Signal_Y.r = []
+
     for j in game_state[1:]: # the first one is the ship position
         # x,y --> d,phi
         
         d, phi = calculate_r_phi(X,Y,j["x"],j["y"])
-        Signal_X.x.append(d)
-        Signal_Y.x.append(phi)
+        Signal_X.x.append(phi)
         Signal_X.r.append(d)
-        Signal_Y.r.append(d)
+
         
     Signal_X.analyse()
-    Signal_Y.analyse()
+    
+    '''
     print("Matching ")
     print(Signal_X.x)
     print(Signal_X.x_retrieved)
     print(Signal_Y.x)
     print(Signal_Y.x_retrieved)
+    
     # Output the retrieved data
     if len(Signal_X.x_retrieved) == len(Signal_Y.x_retrieved):
         for i in range(len(Signal_X.x_retrieved)):
@@ -390,20 +410,20 @@ def test():
 
     print(response)
         
-
+    '''
     if running == True:
          threading.Timer(1, test).start()
 
 Signal_X = Signal("distance",[300,100], [100,100])
-Signal_Y = Signal("phi",-80,[100])
+
 running = True
 # get input every n seconds
 threading.Timer(0.1, test).start()
 # check Input
 threading.Timer(0.01, check_input).start()
 
-ani_x = FuncAnimation(Signal_X.fig, Signal_X.update, frames=100, blit=True, interval=100)
-ani_y = FuncAnimation(Signal_Y.fig, Signal_Y.update, frames=100, blit=True, interval=100)
+ani_phi = FuncAnimation(Signal_X.fig, Signal_X.update, frames=100, blit=True, interval=100)
+ani_D = FuncAnimation(Signal_X.fig_D, Signal_X.update_D, frames=100, blit=True, interval=100)
 plt.show()
 
     

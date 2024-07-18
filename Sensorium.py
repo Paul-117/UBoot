@@ -98,8 +98,10 @@ class Signal:
         self.Sigma = []
         self.x_retrieve_start = 0
         self.x_retrieved = None
+        self.D_retrieved = None
         self.x_retrieve_end = 0 
         self.x_retrieved_uncertainty = 0
+        self.D_retrieved_uncertainty = 0
         self.Above_Threashold_Regions = []
 
         
@@ -145,10 +147,12 @@ class Signal:
 
     def reset_Y(self):
         self.Y = np.zeros(self.X)
+        self.D = np.zeros(self.X)
 
     def add_Noise(self):
 
         self.Y += np.random.normal(0,self.Noise,self.X)
+        self.D += np.random.normal(0,500,self.X)
 
     def add_Gaussian(self,X,x,I,sigma):
 
@@ -167,7 +171,7 @@ class Signal:
                     
                 I_local = np.random.uniform(0.1, 1) * self.I[j]
                 sigma_local = np.random.uniform(0.1 * self.Sigma[j], 0.3 * self.Sigma[j])
-                x_local = np.random.normal(self.x[j], self.Sigma[j] * 1.5)
+                x_local = np.random.normal(self.x[j], self.Sigma[j])
                 
                 if self.name == "phi":
                     Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
@@ -189,19 +193,27 @@ class Signal:
         d_fucked = d + np.random.uniform(-delta_d, delta_d)
 
         return d_fucked
+    
+    def fuck_D(self):
+        for i,sigma in enumerate(self.Sigma):
+            d_local = self.fuck_d(self.r[i])
+            self.D[int(self.x[i]-sigma/2):int(self.x[i]+sigma/2)] = d_local
 
     def fuck(self):
         self.get_I()
         self.get_Sigma()
-        self.add_Noise()
+        #self.add_Noise()
+        self.fuck_D()
         self.add_multiple_Gaussians()
     
     def unfuck(self):
 
         self.x_retrieved = []
         self.x_retrieved_uncertainty = []
+        self.D_retrieved = []
+        self.D_retrieved_uncertainty = []
         self.Above_Threashold_Regions = []
-        self.D = np.zeros(self.X)
+        
 
 
         X_above_Threashold = np.arange(-self.X/2,self.X/2)[self.Y_mean > self.Threashold]
@@ -211,26 +223,25 @@ class Signal:
         self.Above_Threashold_Regions = np.split(X_above_Threashold, jump_indices + 1)
                          
         for region in self.Above_Threashold_Regions:
-            if len(region) > 0:
+            if len(region) > 1:
+                a = int(region[0])
+                b = int(region[-1])
+
                 self.x_retrieved.append(region[0] + (region[-1] - region[0] )/2 )
                 self.x_retrieved_uncertainty.append( region[-1] - region[0] )
-                # Add the region to self.D
-                # später richtiges d zur richtigen region zuweisen 
-                d = 100
-                d_fucked = self.fuck_d(d)
-                region = region.astype(int)
-                self.D[region] = d_fucked + np.random.normal(0,d*0.1,len(region))
-
+                self.D_retrieved.append(np.mean(self.D[a:b]))
+                self.D_retrieved_uncertainty.append(np.max(self.D[a:b]) - np.min(self.D[a:b])) 
+        print("self.D_retrieved", self.D_retrieved)
+    
     def analyse(self):
-        print(self.name)
-        print(self.x)
+
         self.reset_Y()
         self.fuck()
        
         self.Y_stack = np.vstack([self.Y_stack,self.Y])
         self.Y_mean = np.mean(self.Y_stack, axis=0)
         self.unfuck()
-        print(self.x_retrieved)
+
 
         while len(self.Y_stack) >= self.Average_Spectra:
             self.Y_stack = np.delete(self.Y_stack,0,0)
@@ -241,7 +252,11 @@ class Signal:
     def add_vertical_line(self, x_position):
         line = self.ax.axvline(x_position, color='red', linestyle='-')
         self.vertical_lines.append(line)
-
+    
+    def add_vertical_line_D(self, x_position):
+        line = self.ax.axvline(x_position, color='red', linestyle='-')
+        self.vertical_lines.append(line)
+    
     def update(self, frame):
 
         # Emty list 
@@ -389,6 +404,7 @@ def test():
         d, phi = calculate_r_phi(X,Y,j["x"],j["y"])
         Signal_X.x.append(phi)
         Signal_X.r.append(d)
+        print(d)
 
         
     Signal_X.analyse()

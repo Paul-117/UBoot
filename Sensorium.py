@@ -112,6 +112,7 @@ class Signal:
         
         self.horizontal_line = self.ax.axhline(self.Threashold, color='red', linestyle='--') # We only need one 
         self.vertical_lines = []
+        self.vertical_lines_D = []
 
 
         self.line, = self.ax.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
@@ -126,9 +127,6 @@ class Signal:
         self.get_Sigma()
         #print(self.I,self.Sigma)
     
-        
-        
-
     def get_I(self):
         self.I = []
         
@@ -152,7 +150,7 @@ class Signal:
     def add_Noise(self):
 
         self.Y += np.random.normal(0,self.Noise,self.X)
-        self.D += np.random.normal(0,500,self.X)
+        self.D += np.random.normal(0,50,self.X)
 
     def add_Gaussian(self,X,x,I,sigma):
 
@@ -171,7 +169,7 @@ class Signal:
                     
                 I_local = np.random.uniform(0.1, 1) * self.I[j]
                 sigma_local = np.random.uniform(0.1 * self.Sigma[j], 0.3 * self.Sigma[j])
-                x_local = np.random.normal(self.x[j], self.Sigma[j])
+                x_local = np.random.normal(self.x[j], self.Sigma[j]/3)
                 
                 if self.name == "phi":
                     Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
@@ -224,13 +222,14 @@ class Signal:
                          
         for region in self.Above_Threashold_Regions:
             if len(region) > 1:
-                a = int(region[0])
-                b = int(region[-1])
+                a = -180 + int(region[0]) # region sind die x werte diese gehen von -180 bis 180 wir wollen aber die array indices 
+                b = -180 + int(region[-1])
 
                 self.x_retrieved.append(region[0] + (region[-1] - region[0] )/2 )
                 self.x_retrieved_uncertainty.append( region[-1] - region[0] )
-                self.D_retrieved.append(np.mean(self.D[a:b]))
-                self.D_retrieved_uncertainty.append(np.max(self.D[a:b]) - np.min(self.D[a:b])) 
+                self.D_retrieved.append(np.mean(self.D_mean[a:b]))
+
+                self.D_retrieved_uncertainty.append(np.max(self.D_mean[a:b]) - np.min(self.D_mean[a:b])) 
         print("self.D_retrieved", self.D_retrieved)
     
     def analyse(self):
@@ -240,10 +239,14 @@ class Signal:
        
         self.Y_stack = np.vstack([self.Y_stack,self.Y])
         self.Y_mean = np.mean(self.Y_stack, axis=0)
+
+        self.D_stack = np.vstack([self.D_stack,self.D])
+        self.D_mean = np.mean(self.D_stack, axis=0)
+
         self.unfuck()
 
-
         while len(self.Y_stack) >= self.Average_Spectra:
+            self.D_stack = np.delete(self.D_stack,0,0)
             self.Y_stack = np.delete(self.Y_stack,0,0)
 
     def plot(self):
@@ -252,16 +255,16 @@ class Signal:
     def add_vertical_line(self, x_position):
         line = self.ax.axvline(x_position, color='red', linestyle='-')
         self.vertical_lines.append(line)
-    
+
     def add_vertical_line_D(self, x_position):
-        line = self.ax.axvline(x_position, color='red', linestyle='-')
-        self.vertical_lines.append(line)
+        line_D = self.ax_D.axvline(x_position, color='red', linestyle='-')
+        self.vertical_lines_D.append(line_D)
     
     def update(self, frame):
 
         # Emty list 
-        for penis in self.vertical_lines:
-            penis.remove()
+        for line in self.vertical_lines:
+            line.remove()
         self.vertical_lines = []
 
         # Display the current Threashold
@@ -296,10 +299,21 @@ class Signal:
         return [self.line, self.horizontal_line, self.text_average_spectra] + self.vertical_lines
     
     def update_D(self, frame):
+        
+        self.line_D.set_ydata(self.D_mean)
 
-        self.line_D.set_ydata(self.D)
+        # Emty list 
+        for line in self.vertical_lines_D:
+            line.remove()
+        self.vertical_lines_D = []
 
-        return [self.line_D]
+        for i in range(len(self.Above_Threashold_Regions)):
+            if len(self.Above_Threashold_Regions[i]) > 0:
+                self.add_vertical_line_D(self.Above_Threashold_Regions[i][0])
+                self.add_vertical_line_D(self.Above_Threashold_Regions[i][-1])
+
+
+        return [self.line_D] + self.vertical_lines_D
 
 def check_input():
     global running 

@@ -161,7 +161,7 @@ class Signal:
     def add_multiple_Gaussians(self):
         Y_stack = np.zeros(self.X)
         i = 0 
-        
+        print("self.x",self.x)
         while i < self.num_of_Gaussians:
             
             j = 0 
@@ -170,11 +170,9 @@ class Signal:
                 I_local = np.random.uniform(0.1, 1) * self.I[j]
                 sigma_local = np.random.uniform(0.1 * self.Sigma[j], 0.3 * self.Sigma[j])
                 x_local = np.random.normal(self.x[j], self.Sigma[j]/3)
+            
+                Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
                 
-                if self.name == "phi":
-                    Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
-                else:
-                    Y_local = self.add_Gaussian(np.arange(self.X), x_local, I_local, sigma_local)
                 Y_stack = np.vstack([Y_stack,Y_local])
                 
                 
@@ -195,7 +193,7 @@ class Signal:
     def fuck_D(self):
         for i,sigma in enumerate(self.Sigma):
             d_local = self.fuck_d(self.r[i])
-            self.D[int(self.x[i]-sigma/2):int(self.x[i]+sigma/2)] = d_local
+            self.D[int(self.x[i]-sigma/2)-180:int(self.x[i]+sigma/2)-180] = d_local
 
     def fuck(self):
         self.get_I()
@@ -230,8 +228,7 @@ class Signal:
                 self.D_retrieved.append(np.mean(self.D_mean[a:b]))
 
                 self.D_retrieved_uncertainty.append(np.max(self.D_mean[a:b]) - np.min(self.D_mean[a:b])) 
-        print("self.D_retrieved", self.D_retrieved)
-    
+        
     def analyse(self):
 
         self.reset_Y()
@@ -418,11 +415,13 @@ def test():
         d, phi = calculate_r_phi(X,Y,j["x"],j["y"])
         Signal_X.x.append(phi)
         Signal_X.r.append(d)
-        print(d)
+        print("Input:"," Phi: ", phi, " D: ",d)
 
         
     Signal_X.analyse()
     
+    print("Output:"," Phi: ", Signal_X.x_retrieved, " D: ",Signal_X.D_retrieved)
+
     '''
     print("Matching ")
     print(Signal_X.x)

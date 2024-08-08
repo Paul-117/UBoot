@@ -2,16 +2,16 @@ import numpy as np
 import math 
 import matplotlib.pyplot as plt
 
-def calculate_r_phi(X,Y,x,y):
+array1 = [1, 7, 5, 3]
+array2 = [6, 7, 9, 5]
 
-    distance = math.sqrt((math.pow(X - x,2)) + (math.pow(Y - y,2)))
-    dir_x, dir_y = x - X, +(Y - y)
-    angle = ((180 / math.pi) * math.atan2(-dir_y, dir_x)+90+360)%360
+# Get the sorted indices of array1
+sorted_indices = sorted(range(len(array1)), key=lambda i: array1[i], reverse=True)
 
-    if angle > 180:
-        angle = -(360-angle)
-    
-    return distance, angle 
+# Rearrange array1 and array2 according to the sorted order of array1
+sorted_array1 = [array1[i] for i in sorted_indices]
+sorted_array2 = [array2[i] for i in sorted_indices]
 
-print(calculate_r_phi(0,0,10,10))
+# Output the resulting pairs
 
+print(sorted_array1,sorted_array2)

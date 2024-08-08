@@ -77,11 +77,11 @@ def pol2cart(X,Y,d, phi):
 
 class Signal:
   
-    def __init__(self,name,x,r):
+    def __init__(self):
 
 
         self.X = 360
-        self.name = name
+        
         self.Y = np.zeros(self.X)
         self.Y_stack = np.zeros(self.X)
         self.Y_mean = np.zeros(self.X)
@@ -89,7 +89,7 @@ class Signal:
         self.D_stack = np.zeros(self.X)
         self.D_mean = np.zeros(self.X)
         self.x = []
-        self.r = r
+        self.r = []
         self.Threashold = 1
         self.Average_Spectra = 1
         self.Noise = 0.1
@@ -120,7 +120,7 @@ class Signal:
         self.text_x_retrieved = self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=12)
         self.text_average_spectra = self.ax.text(0.1, 0.85, "", transform=self.ax.transAxes, fontsize=12)
         self.ax.set_ylim(-0.5, 3)
-        self.ax_D.set_ylim(-0.5, 500)
+        self.ax_D.set_ylim(-0.5, 700)
         
         # Calculations
         self.get_I()
@@ -150,7 +150,7 @@ class Signal:
     def add_Noise(self):
 
         self.Y += np.random.normal(0,self.Noise,self.X)
-        self.D += np.random.normal(0,50,self.X)
+        #self.D += np.random.normal(0,500,self.X)
 
     def add_Gaussian(self,X,x,I,sigma):
 
@@ -161,7 +161,7 @@ class Signal:
     def add_multiple_Gaussians(self):
         Y_stack = np.zeros(self.X)
         i = 0 
-        print("self.x",self.x)
+        
         while i < self.num_of_Gaussians:
             
             j = 0 
@@ -174,8 +174,6 @@ class Signal:
                 Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
                 
                 Y_stack = np.vstack([Y_stack,Y_local])
-                
-                
                 
                 j += 1 
 
@@ -191,6 +189,16 @@ class Signal:
         return d_fucked
     
     def fuck_D(self):
+
+        # always display the furthest away first and overwrite if a nearer one is detected 
+
+        sorted_indices = sorted(range(len(self.r)), key=lambda i: self.r[i], reverse=True)
+
+        # Rearrange array1 and array2 according to the sorted order of array1
+        sorted_r = [self.r[i] for i in sorted_indices]
+        sorted_sigma = [self.Sigma[i] for i in sorted_indices]
+
+
         for i,sigma in enumerate(self.Sigma):
             d_local = self.fuck_d(self.r[i])
             self.D[int(self.x[i]-sigma/2)-180:int(self.x[i]+sigma/2)-180] = d_local
@@ -198,7 +206,7 @@ class Signal:
     def fuck(self):
         self.get_I()
         self.get_Sigma()
-        #self.add_Noise()
+        self.add_Noise()
         self.fuck_D()
         self.add_multiple_Gaussians()
     
@@ -225,9 +233,13 @@ class Signal:
 
                 self.x_retrieved.append(region[0] + (region[-1] - region[0] )/2 )
                 self.x_retrieved_uncertainty.append( region[-1] - region[0] )
-                self.D_retrieved.append(np.mean(self.D_mean[a:b]))
+                #self.D_retrieved.append(np.mean(self.D_mean[a:b]))
 
                 self.D_retrieved_uncertainty.append(np.max(self.D_mean[a:b]) - np.min(self.D_mean[a:b])) 
+
+        # Übergangsweise 
+        for r in self.r:
+            self.D_retrieved.append(self.fuck_d(r))
         
     def analyse(self):
 
@@ -240,6 +252,17 @@ class Signal:
         self.D_stack = np.vstack([self.D_stack,self.D])
         self.D_mean = np.mean(self.D_stack, axis=0)
 
+        # self.Y_mean normieren nicht nur mit einem max value sondern mit den obersten 50 
+
+        y = np.sort(self.Y_mean) # sort array
+        y = y[::-1] # reverse sort order
+        y = y[0:10] # take a slice of the first 5
+
+        max_Y = np.mean(y)
+        factor = 1/max_Y
+
+        #self.D_mean = self.D_mean*self.Y_mean*factor
+        
         self.unfuck()
 
         while len(self.Y_stack) >= self.Average_Spectra:
@@ -387,16 +410,12 @@ def get_and_send_Positions():
 data = []
 data.append({"ship_x": 0,"ship_y": 0})
 
-extracted = {"Name": "enemy1", "x": 150, "y": 100}
-data.append(extracted)
-'''
 extracted = {"Name": "enemy2", "x": 50, "y": -100}
 data.append(extracted)
-extracted = {"Name": "enemy2", "x": 300, "y": 0}
+extracted = {"Name": "enemy1", "x": -100, "y": 300}
 data.append(extracted)
-extracted = {"Name": "enemy2", "x": -300, "y": 300}
-data.append(extracted)
-'''
+
+
 response = json.dumps(data).encode('utf-8')
 game_state = json.loads(response.decode('utf-8'))
 
@@ -419,6 +438,7 @@ def test():
 
         
     Signal_X.analyse()
+
     
     print("Output:"," Phi: ", Signal_X.x_retrieved, " D: ",Signal_X.D_retrieved)
 
@@ -443,7 +463,7 @@ def test():
     if running == True:
          threading.Timer(1, test).start()
 
-Signal_X = Signal("distance",[300,100], [100,100])
+Signal_X = Signal()
 
 running = True
 # get input every n seconds

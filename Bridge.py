@@ -57,9 +57,14 @@ def handle_client(conn, addr):
                     data = []
                     data.append({"ship_x": ship.x,"ship_y": ship.y})
                     for i in Enemys:
-                        extracted = {"Name": i.Name, "x": i.x, "y": i.y, 'phi': i.phi}
+                        extracted = {"Name": i.Name, "x": i.x, "y": i.y}
                         data.append(extracted)
-                        print(extracted)
+                        
+
+                    for j in Torpedos:
+                        extracted = {"Name": j.Name, "x": j.x, "y": j.y}
+                        data.append(extracted)
+                        
                     
                     response = json.dumps(data).encode('utf-8')
                     conn.sendall(response)
@@ -191,7 +196,7 @@ class Player:
         
         if self.cooldown == 0:
             # Deafult Zünder auf 
-            Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, 200 )
+            Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, 500 )
 
             self.cooldown += 50
 
@@ -473,7 +478,7 @@ ship = Player('Player','data/Uboot.png', 100,0,0, 0,0,(10,40),None,None,None,Non
 
 # enemy 
 enemy = Enemy('Enemy','data/Uboot2.png',100, 0,100, 0,(0.01,0),(10,40),None,None,None,None)
-enemy2 = Enemy('Enemy2','data/Uboot2.png',100, -200,300, 0,(0.01,0),(10,40),None,None,None,None)
+#enemy2 = Enemy('Enemy2','data/Uboot2.png',100, -200,300, 0,(0.01,0),(10,40),None,None,None,None)
 
 ### Game Loop ###
 

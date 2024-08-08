@@ -34,7 +34,7 @@ def get_game_state():
 def update_game_state(new_state):
     HOST = "127.0.0.1"  # Server's IP address
     PORT = 8080
-
+    
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
         print("Connected to Server")
@@ -53,7 +53,7 @@ def retrieve_xy(x_ship,X,y_ship,Y):
     sigma = 0.05*r
     x = np.random.normal(loc=X, scale=sigma, size=None)
     y = np.random.normal(loc=Y, scale=sigma, size=None)
-    print(r,x,y,sigma*5)
+    
     return x,y,sigma*2
 
 #r = np.sqrt(coordinates[0]**2+coordinates[1]**2)
@@ -69,11 +69,11 @@ def calculate_r_phi(X,Y,x,y):
     
     return distance, angle 
 
-def pol2cart(X,Y,d, phi):
-
+def pol2cart(X, Y, d, phi):
+    
     x = X + d * np.sin(math.radians(phi))
     y = Y - d * np.cos(math.radians(phi))
-    return(int(x), int(y))
+    return (round(x), round(y))
 
 class Signal:
   
@@ -93,7 +93,7 @@ class Signal:
         self.Threashold = 1
         self.Average_Spectra = 1
         self.Noise = 0.1
-        self.num_of_Gaussians = 3
+        self.num_of_Gaussians = 1
         self.I = []
         self.Sigma = []
         self.x_retrieve_start = 0
@@ -127,11 +127,15 @@ class Signal:
         self.get_Sigma()
         #print(self.I,self.Sigma)
     
+    def moving_average(self,array, window_size):
+        return np.convolve(array, np.ones(window_size)/window_size, mode='same')
+
+
     def get_I(self):
         self.I = []
         
         for r in self.r:
-            if r < 500:
+            if r < 700:
                 self.I.append(7)#= 2#-self.r*0.001*self.Noise+ 10*self.Noise
                 
             else:
@@ -150,7 +154,7 @@ class Signal:
     def add_Noise(self):
 
         self.Y += np.random.normal(0,self.Noise,self.X)
-        #self.D += np.random.normal(0,500,self.X)
+        self.D += np.random.normal(0,50,self.X)
 
     def add_Gaussian(self,X,x,I,sigma):
 
@@ -167,9 +171,9 @@ class Signal:
             j = 0 
             while j < len(self.x):
                     
-                I_local = np.random.uniform(0.1, 1) * self.I[j]
-                sigma_local = np.random.uniform(0.1 * self.Sigma[j], 0.3 * self.Sigma[j])
-                x_local = np.random.normal(self.x[j], self.Sigma[j]/3)
+                I_local = np.random.uniform(0.7, 1) * self.I[j]
+                sigma_local = np.random.uniform(0.1 * self.Sigma[j], 0.2 * self.Sigma[j])
+                x_local = np.random.normal(self.x[j], self.Sigma[j]/5)
             
                 Y_local = self.add_Gaussian(np.arange(-self.X/2, self.X/2), x_local, I_local, sigma_local)
                 
@@ -200,13 +204,14 @@ class Signal:
 
 
         for i,sigma in enumerate(self.Sigma):
-            d_local = self.fuck_d(self.r[i])
-            self.D[int(self.x[i]-sigma/2)-180:int(self.x[i]+sigma/2)-180] = d_local
+            #d_local = self.fuck_d(self.r[i])
+            d_local = self.r[i]
+            self.D[int(self.x[i]-sigma/2 * 1.5)-180:int(self.x[i]+sigma/2 * 1.5)-180] = d_local
 
     def fuck(self):
         self.get_I()
         self.get_Sigma()
-        self.add_Noise()
+        #self.add_Noise()
         self.fuck_D()
         self.add_multiple_Gaussians()
     
@@ -231,16 +236,12 @@ class Signal:
                 a = -180 + int(region[0]) # region sind die x werte diese gehen von -180 bis 180 wir wollen aber die array indices 
                 b = -180 + int(region[-1])
 
-                self.x_retrieved.append(region[0] + (region[-1] - region[0] )/2 )
-                self.x_retrieved_uncertainty.append( region[-1] - region[0] )
-                #self.D_retrieved.append(np.mean(self.D_mean[a:b]))
-
+                self.x_retrieved.append(int(region[0] + (region[-1] - region[0] )/2 ))
+                self.x_retrieved_uncertainty.append(int(region[-1] - region[0] ))
+                #self.D_retrieved.append(int(np.mean(self.D_mean[a:b])))
+                self.D_retrieved.append(int(np.max(self.D_mean[a:b])))
                 self.D_retrieved_uncertainty.append(np.max(self.D_mean[a:b]) - np.min(self.D_mean[a:b])) 
-
-        # Übergangsweise 
-        for r in self.r:
-            self.D_retrieved.append(self.fuck_d(r))
-        
+  
     def analyse(self):
 
         self.reset_Y()
@@ -256,11 +257,12 @@ class Signal:
 
         y = np.sort(self.Y_mean) # sort array
         y = y[::-1] # reverse sort order
-        y = y[0:10] # take a slice of the first 5
+        y = y[0:1] # take a slice of the first 5
 
         max_Y = np.mean(y)
         factor = 1/max_Y
-
+        print(factor)
+        #Y_averaged = self.moving_average(self.Y_mean,3)
         #self.D_mean = self.D_mean*self.Y_mean*factor
         
         self.unfuck()
@@ -365,68 +367,86 @@ def check_input():
 def get_and_send_Positions():
     global running 
     game_state = get_game_state()
-
+    response = {"x": [], "y": [], "uncertainty": []}
     X = game_state[0]["ship_x"]
     Y = game_state[0]["ship_y"]
-
     response = {"x": [], "y": [], "uncertainty": []}
     Signal_X.x = []
-    Signal_Y.x = []
     Signal_X.r = []
-    Signal_Y.r = []
+    x = 0
+    y = 0 
 
     for j in game_state[1:]: # the first one is the ship position
         # x,y --> d,phi
         
         d, phi = calculate_r_phi(X,Y,j["x"],j["y"])
-        Signal_X.x.append(d)
-        Signal_Y.x.append(phi)
+        print("x",j["x"])
+        print("y",j["y"])
+        print("d",d)
+        print("phi",phi)
+        Signal_X.x.append(phi)
         Signal_X.r.append(d)
-        Signal_Y.r.append(d)
+        #print("Input:"," Phi: ", phi, " D: ",d)
 
+        
     Signal_X.analyse()
-    Signal_Y.analyse()    
+
+    
+    #print("Output:"," Phi: ", Signal_X.x_retrieved, " D: ",Signal_X.D_retrieved)
 
 
     # Output the retrieved data
-    if len(Signal_X.x_retrieved) == len(Signal_Y.x_retrieved):
+    if len(Signal_X.x_retrieved) != 0:
         for i in range(len(Signal_X.x_retrieved)):
-            x_retrieved, y_retrieved = pol2cart(X,Y,Signal_X.x_retrieved[i],Signal_Y.x_retrieved[i])
+            print("d retrieved", Signal_X.D_retrieved[i])
+            print("phi retrieved", Signal_X.x_retrieved[i])
+            x_retrieved, y_retrieved = pol2cart(X,Y,Signal_X.D_retrieved[i],Signal_X.x_retrieved[i])
             response["x"].append(int(x_retrieved))
             response["y"].append(int(y_retrieved))
-            response["uncertainty"].append(int(np.sqrt(Signal_X.x_retrieved_uncertainty[i]**2+Signal_Y.x_retrieved_uncertainty[i]**2)))
+            response["uncertainty"].append(int(Signal_X.x_retrieved_uncertainty[i]))
 
-    print("Game State: ",  game_state)
-    print("Signal: ", Signal_X.x,Signal_Y.x)
-    print("Retrieved: ", Signal_X.x_retrieved,Signal_Y.x_retrieved)
-    print("Sent to Server: ", response)
-    update_game_state(response)
-
+        print("x retrieved", x_retrieved)
+        print("y retrieved", y_retrieved)
+        update_game_state(response)    
+        print("response sent")
+    
     if running == True:
          threading.Timer(1, get_and_send_Positions).start()
 
-
 ##### Test ####
-data = []
-data.append({"ship_x": 0,"ship_y": 0})
 
-extracted = {"Name": "enemy2", "x": 50, "y": -100}
-data.append(extracted)
-extracted = {"Name": "enemy1", "x": -100, "y": 300}
-data.append(extracted)
+#extracted = {"Name": "enemy1", "x": -100, "y": 300}
+#data.append(extracted)
 
 
-response = json.dumps(data).encode('utf-8')
-game_state = json.loads(response.decode('utf-8'))
+
 
 def test():
     global running 
+
+    data = []
+    data.append({"ship_x": 0,"ship_y": 0})
+    x = 100#np.random.uniform(-353, 353)
+    y = 100#np.random.uniform(-353, 353)
+
+    #print("x", x, "y", y)
+    extracted = {"Name": "enemy2", "x": x, "y": y}
+    data.append(extracted)
+    
+    x2 = 300#np.random.uniform(-353, 353)
+    y2 = -300#np.random.uniform(-353, 353)
+    extracted = {"Name": "enemy2", "x": x2, "y": y2}
+    data.append(extracted)
+    
+    response = json.dumps(data).encode('utf-8')
+    game_state = json.loads(response.decode('utf-8'))
 
     X = game_state[0]["ship_x"]
     Y = game_state[0]["ship_y"]
     response = {"x": [], "y": [], "uncertainty": []}
     Signal_X.x = []
     Signal_X.r = []
+
 
     for j in game_state[1:]: # the first one is the ship position
         # x,y --> d,phi
@@ -434,32 +454,31 @@ def test():
         d, phi = calculate_r_phi(X,Y,j["x"],j["y"])
         Signal_X.x.append(phi)
         Signal_X.r.append(d)
-        print("Input:"," Phi: ", phi, " D: ",d)
+        #print("Input:"," Phi: ", phi, " D: ",d)
 
         
     Signal_X.analyse()
 
     
-    print("Output:"," Phi: ", Signal_X.x_retrieved, " D: ",Signal_X.D_retrieved)
+    #print("Output:"," Phi: ", Signal_X.x_retrieved, " D: ",Signal_X.D_retrieved)
 
-    '''
-    print("Matching ")
-    print(Signal_X.x)
-    print(Signal_X.x_retrieved)
-    print(Signal_Y.x)
-    print(Signal_Y.x_retrieved)
-    
+
     # Output the retrieved data
-    if len(Signal_X.x_retrieved) == len(Signal_Y.x_retrieved):
-        for i in range(len(Signal_X.x_retrieved)):
-            x_retrieved, y_retrieved = pol2cart(X,Y,Signal_X.x_retrieved[i],Signal_Y.x_retrieved[i])
-            response["x"].append(int(x_retrieved))
-            response["y"].append(int(y_retrieved))
-            response["uncertainty"].append(int(np.sqrt(Signal_X.x_retrieved_uncertainty[i]**2+Signal_Y.x_retrieved_uncertainty[i]**2)))
 
-    print(response)
-        
-    '''
+    print("d",Signal_X.r, Signal_X.D_retrieved)
+    print("phi",Signal_X.x, Signal_X.x_retrieved)
+    for i in range(len(Signal_X.x_retrieved)):
+        #print(X,Y,Signal_X.x_retrieved[i],Signal_X.D_retrieved[i])
+        x_retrieved, y_retrieved = pol2cart(X,Y,Signal_X.D_retrieved[i],Signal_X.x_retrieved[i])
+        response["x"].append(int(x_retrieved))
+        response["y"].append(int(y_retrieved))
+        response["uncertainty"].append(int(Signal_X.x_retrieved_uncertainty[i]))
+
+        #print(x- x_retrieved, y-y_retrieved)
+        #print(x2- x_retrieved, y2-y_retrieved)
+
+    #update_game_state(response)    
+    
     if running == True:
          threading.Timer(1, test).start()
 
@@ -467,7 +486,8 @@ Signal_X = Signal()
 
 running = True
 # get input every n seconds
-threading.Timer(0.1, test).start()
+threading.Timer(0.1, get_and_send_Positions).start()
+#threading.Timer(0.1, test).start()
 # check Input
 threading.Timer(0.01, check_input).start()
 

@@ -79,6 +79,11 @@ def handle_client(conn, addr):
                     for i in range(len(x)):
                         new = detection(x[i],y[i],u[i],100)
                         detections.append(new)
+            
+            if command["ID"] == "Amarium":
+
+                ship.Zeitzünder = command["data"]
+
 
     except ConnectionResetError:
         print(f"Connection with {addr} was reset.")
@@ -143,6 +148,7 @@ class Player:
         self.phi_detected = phi_detected
         self.uncertaincy = uncertaincy
         self.cooldown = 0
+        self.Zeitzünder = 300
 
     def acceleration(self):
      
@@ -196,7 +202,7 @@ class Player:
         
         if self.cooldown == 0:
             # Deafult Zünder auf 
-            Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, 500 )
+            Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, self.Zeitzünder )
 
             self.cooldown += 50
 

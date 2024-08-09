@@ -92,7 +92,7 @@ class Signal:
         self.r = []
         self.Threashold = 1
         self.Average_Spectra = 1
-        self.Noise = 0.1
+        self.Noise = 0.03
         self.num_of_Gaussians = 1
         self.I = []
         self.Sigma = []
@@ -116,7 +116,7 @@ class Signal:
 
 
         self.line, = self.ax.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
-        self.line_D, = self.ax_D.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
+        self.line_D, = self.ax_D.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black', linestyle='None', marker='o', markersize=1)
         self.text_x_retrieved = self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=12)
         self.text_average_spectra = self.ax.text(0.1, 0.85, "", transform=self.ax.transAxes, fontsize=12)
         self.ax.set_ylim(-0.5, 3)
@@ -154,7 +154,7 @@ class Signal:
     def add_Noise(self):
 
         self.Y += np.random.normal(0,self.Noise,self.X)
-        self.D += np.random.normal(0,50,self.X)
+        self.D += np.random.normal(0,300,self.X)
 
     def add_Gaussian(self,X,x,I,sigma):
 
@@ -211,7 +211,7 @@ class Signal:
     def fuck(self):
         self.get_I()
         self.get_Sigma()
-        #self.add_Noise()
+        self.add_Noise()
         self.fuck_D()
         self.add_multiple_Gaussians()
     
@@ -486,8 +486,8 @@ Signal_X = Signal()
 
 running = True
 # get input every n seconds
-threading.Timer(0.1, get_and_send_Positions).start()
-#threading.Timer(0.1, test).start()
+#threading.Timer(0.1, get_and_send_Positions).start()
+threading.Timer(0.1, test).start()
 # check Input
 threading.Timer(0.01, check_input).start()
 

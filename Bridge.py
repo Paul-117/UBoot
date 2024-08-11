@@ -6,9 +6,12 @@ import numpy as np
 import pygame
 import random
 import math
-
+import serial
 # initializing pygame
 pygame.init()
+
+# Setup serial connection (adjust the port as necessary)
+ser = serial.Serial('COM3', 115200)  # Replace 'COM3' with your port (e.g., '/dev/ttyACM0' on Linux)
 
 ##### Communication #####
 def handle_client(conn, addr):
@@ -57,12 +60,12 @@ def handle_client(conn, addr):
                     data = []
                     data.append({"ship_x": ship.x,"ship_y": ship.y})
                     for i in Enemys:
-                        extracted = {"Name": i.Name, "x": i.x, "y": i.y}
+                        extracted = {"x": i.x, "y": i.y}
                         data.append(extracted)
                         
 
                     for j in Torpedos:
-                        extracted = {"Name": j.Name, "x": j.x, "y": j.y}
+                        extracted = {"x": j.x, "y": j.y}
                         data.append(extracted)
                         
                     
@@ -121,8 +124,20 @@ def infoscreen():
 
         screen.blit(j, (10, text_spacing[i]))
 
+def Hardware_listener():
+    while True:
+        if ser.in_waiting > 0:
+            message = ser.readline().decode('utf-8').strip()
+            print(f'Received: {message}')
+            if message == "Fire":
+                ship.Launch_Torpedo()
 ##### Game State Modification #####
-     
+def pol2cart(X, Y, d, phi):
+    
+    x = X + d * np.sin(math.radians(phi))
+    y = Y - d * np.cos(math.radians(phi))
+    return (round(x), round(y))
+ 
 class Player:
   
     def __init__(self,Name, Image,hp, x,y,phi,v,scale,x_detected,y_detected,phi_detected,uncertaincy):
@@ -264,6 +279,7 @@ class Torpedo:
   
     def __init__(self, Name, Image, x,y,phi,v,scale,x_detected,y_detected,phi_detected,uncertaincy,Zeitzünder):
 
+        
         self.Name = Name
         self.Image = Image
         self.scale = scale
@@ -379,10 +395,10 @@ class Enemy:
         self.hp = hp
         #self.x = x
         #self.y = y 
-        r = 400
+        r = 300
         phi = np.random.uniform(0, 360)
-        x = x#ship.x + r*math.sin(math.radians(phi))
-        y = y#ship.y + r*math.cos(math.radians(phi))
+        x = -300 #ship.x + r*math.sin(math.radians(phi))
+        y = -300 #ship.y + r*math.cos(math.radians(phi))
         self.x = x
         self.y = y
         self.phi = phi
@@ -409,7 +425,7 @@ class Enemy:
         
         angle = self.get_angle_towards_Player()
 
-        self.phi = np.random.uniform(angle -30, angle+30)
+        self.phi = np.random.uniform(angle , angle)
         self.v_x = math.sin(math.radians(self.phi)) * v
         self.v_y = math.cos(math.radians(self.phi)) * v 
 
@@ -417,11 +433,11 @@ class Enemy:
            
            angle = self.get_angle_towards_Player()   
            distance = math.sqrt((math.pow(self.x - ship.x,2)) + (math.pow(self.y - ship.y,2)))
-           print(distance)
+           print("Angle",angle)
            v_torpedo = 1
            Zeitzünder = int(distance/v_torpedo + np.random.uniform(-20, 20))
-           print("Zeitzünder: ",Zeitzünder)
-           Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, angle, v_torpedo , (10,10), self.x, self.y,self.phi, 10, Zeitzünder)
+           #print("Zeitzünder: ",Zeitzünder)
+           Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi-180, v_torpedo , (10,10), self.x, self.y,self.phi, 10, Zeitzünder)
 
     def calculatePosition(self):
          
@@ -435,7 +451,7 @@ class Enemy:
             self.change_Movement()
             
 
-        if self.time > 1000: 
+        if self.time > 100: 
             print("Torpedo fired")
             self.fire_Torpedo()
             self.time = 0 
@@ -476,13 +492,20 @@ detections = []
 # player
 ship = Player('Player','data/Uboot.png', 100,0,0, 0,0,(10,40),None,None,None,None)
 
-# enemy 
-enemy = Enemy('Enemy','data/Uboot2.png',100, 0,100, 0,(0.01,0),(10,40),None,None,None,None)
 #enemy2 = Enemy('Enemy2','data/Uboot2.png',100, -200,300, 0,(0.01,0),(10,40),None,None,None,None)
 
 ### Game Loop ###
+def Add_enemy():
+    enemy = Enemy('Enemy','data/Uboot2.png',100, 0,100, 0,(0.01,0),(10,40),None,None,None,None)
+
+    timer = threading.Timer(5, Add_enemy)
+    timer.daemon = True  # Set the thread as a daemon
+    #timer.start()
+
 
 threading.Thread(target=server_program, daemon=True).start()
+threading.Thread(target=Hardware_listener, daemon=True).start()
+threading.Timer(3, Add_enemy).start()
 
 
 running = True

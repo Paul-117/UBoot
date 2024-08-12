@@ -83,6 +83,11 @@ def handle_client(conn, addr):
                         new = detection(x[i],y[i],u[i],100)
                         detections.append(new)
 
+            if command["ID"] == "Amarium":
+
+
+                ship.Zeitzünder = command["data"]
+
     except ConnectionResetError:
         print(f"Connection with {addr} was reset.")
     finally:
@@ -131,6 +136,7 @@ def Hardware_listener():
             print(f'Received: {message}')
             if message == "Fire":
                 ship.Launch_Torpedo()
+
 ##### Game State Modification #####
 def pol2cart(X, Y, d, phi):
     
@@ -397,8 +403,8 @@ class Enemy:
         #self.y = y 
         r = 300
         phi = np.random.uniform(0, 360)
-        x = -300 #ship.x + r*math.sin(math.radians(phi))
-        y = -300 #ship.y + r*math.cos(math.radians(phi))
+        x = -300#ship.x + r*math.sin(math.radians(phi))
+        y = 300#ship.y + r*math.cos(math.radians(phi))
         self.x = x
         self.y = y
         self.phi = phi
@@ -412,9 +418,20 @@ class Enemy:
         Enemys.append(self)
         
     def get_angle_towards_Player(self):
-                
-        dir_x, dir_y = self.x - ship.x, self.y - ship.y
-        angle = (180 / math.pi) * math.atan2(-dir_y, dir_x)+90
+        x = ship.x  # Target ship x position
+        y = ship.y   # Target ship y position (inverted y-axis)
+        ship_x = self.x  # Your ship's x position
+        ship_y = self.y  # Your ship's y position (inverted y-axis)
+
+        # Calculate direction vector from your ship to the target ship
+        dir_x, dir_y = x - ship_x, y - ship_y
+
+        # Since y-axis is inverted, negate dir_y
+        angle = math.degrees(math.atan2(dir_y, dir_x))+90
+        
+        # Adjust the angle to be within [0, 360) range
+        if angle < 0:
+            angle += 360
 
         return angle
  
@@ -434,14 +451,15 @@ class Enemy:
            angle = self.get_angle_towards_Player()   
            distance = math.sqrt((math.pow(self.x - ship.x,2)) + (math.pow(self.y - ship.y,2)))
            print("Angle",angle)
+           print("Self.angle",self.phi)
            v_torpedo = 1
            Zeitzünder = int(distance/v_torpedo + np.random.uniform(-20, 20))
            #print("Zeitzünder: ",Zeitzünder)
-           Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi-180, v_torpedo , (10,10), self.x, self.y,self.phi, 10, Zeitzünder)
+           Torpedo("Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, v_torpedo , (10,10), self.x, self.y,self.phi, 10, Zeitzünder)
 
     def calculatePosition(self):
          
-        self.x -= self.v_x
+        self.x += self.v_x
         self.y -= self.v_y
 
         self.time += 1
@@ -460,7 +478,7 @@ class Enemy:
   
         Image = pygame.image.load(self.Image)
         Image = pygame.transform.scale(Image, self.scale)
-        rot_image = pygame.transform.rotate(Image, self.phi)#rot_image = pygame.transform.rotate(Image, -instance.phi_detected)
+        rot_image = pygame.transform.rotate(Image, self.phi-90)#rot_image = pygame.transform.rotate(Image, -instance.phi_detected)
         rot_rect = rot_image.get_rect(center = (500+self.x-ship.x,500+self.y-ship.y))
         screen.blit(rot_image, rot_rect) 
 
@@ -496,7 +514,7 @@ ship = Player('Player','data/Uboot.png', 100,0,0, 0,0,(10,40),None,None,None,Non
 
 ### Game Loop ###
 def Add_enemy():
-    enemy = Enemy('Enemy','data/Uboot2.png',100, 0,100, 0,(0.01,0),(10,40),None,None,None,None)
+    enemy = Enemy('Enemy','data/Uboot2.png',100, 0,100, 0,(0.1,0),(10,40),None,None,None,None)
 
     timer = threading.Timer(5, Add_enemy)
     timer.daemon = True  # Set the thread as a daemon
@@ -505,7 +523,7 @@ def Add_enemy():
 
 threading.Thread(target=server_program, daemon=True).start()
 threading.Thread(target=Hardware_listener, daemon=True).start()
-threading.Timer(3, Add_enemy).start()
+threading.Timer(1, Add_enemy).start()
 
 
 running = True

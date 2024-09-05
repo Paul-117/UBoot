@@ -1,24 +1,42 @@
-import math
+import pygame
+pygame.init()
+class GameControler:
+  
+    def __init__(self):
+        # Initialize Pygame
+        
 
-def get_angle_towards_Player():
-    x = -100       # Target ship x position
-    y = 100       # Target ship y position (inverted y-axis)
-    ship_x = 0  # Your ship's x position
-    ship_y = 0  # Your ship's y position (inverted y-axis)
+        # Creating screen
+        screen_width = 1000
+        screen_height = 1000
+        self.screen = pygame.display.set_mode((screen_width, screen_height))
+        
+        # Game properties
+        self.gamespeed = 1
+        self.running = True 
 
-    # Calculate direction vector from your ship to the target ship
-    dir_x, dir_y = x - ship_x, y - ship_y
+        # Clock for controlling the framerate
+        self.clock = pygame.time.Clock()
 
-    # Calculate the angle in degrees
-    angle = math.degrees(math.atan2(dir_y, dir_x))
-    
-    # Adjust the angle to match the standard [0, 360) range
-    angle = (angle + 360) % 360
-    
-    # Adjust the angle to align with expected conventions
-    angle = (angle - 90) % 360
-    
-    print(angle)
-    return angle
+        # Start the game loop
+        self.run()
 
-get_angle_towards_Player()
+    def run(self):
+        while self.running:
+            self.screen.fill((0, 0, 102))
+
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+            
+            pygame.display.update()
+
+            self.clock.tick(10 * self.gamespeed)  # 10 FPS multiplied by the gamespeed factor
+
+
+        # Place for game logic and drawing
+        
+        
+
+Controler = GameControler()

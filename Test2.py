@@ -1,13 +1,26 @@
-import numpy as np
+import pygame
+import threading
 
-# Given arrays with non-integer elements
-array1 = np.array([1.2, 5.4, 7.1, 3.3])
-array2 = np.array([3, 5, 8, 3])
+class Game_Controler:
+    def __init__(self):
+        screen_width = 1000
+        screen_height = 1000
+        self.screen = pygame.display.set_mode((screen_width, screen_height))
 
-# Get the indices that would sort array1
-sorted_indices = np.argsort(array1)
-print(sorted_indices)
-# Use these indices to reorder array2
-sorted_array2 = array2[sorted_indices]
+        self.gamespeed = 1
+        self.running = True 
+        self.game_step()
 
-print(sorted_array2)
+    def game_step(self):
+        self.screen.fill((0, 0, 102))
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+        
+        pygame.display.update()
+
+        if self.running:
+            threading.Timer(0.1/self.gamespeed, self.game_step).start()
+
+Controler = Game_Controler()

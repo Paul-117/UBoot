@@ -15,6 +15,11 @@ import time
 import keyboard
 import numpy as np
 
+# Disable all the keymaps
+for key in plt.rcParams:
+    if key.startswith('keymap'):
+        plt.rcParams[key] = []
+
 def get_game_state():
     HOST = "127.0.0.1"  # Server's IP address
     PORT = 8080
@@ -55,8 +60,6 @@ def retrieve_xy(x_ship,X,y_ship,Y):
     y = np.random.normal(loc=Y, scale=sigma, size=None)
     
     return x,y,sigma*2
-
-#r = np.sqrt(coordinates[0]**2+coordinates[1]**2)
 
 def calculate_r_phi(X,Y,x,y):
 
@@ -123,8 +126,11 @@ class Signal:
   
     def __init__(self,test_mode):
 
+        Range = 360 
+        self.pixel_per_deg = 2
 
-        self.X = 360
+        self.X = Range*self.pixel_per_deg
+
         self.Y = np.zeros(self.X)
         self.Y_stack = np.zeros(self.X)
         self.Y_mean = np.zeros(self.X)
@@ -171,9 +177,9 @@ class Signal:
         self.vertical_lines_D = []
 
 
-        self.line, = self.ax.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
+        self.line, = self.ax.plot(np.linspace(-180, +180,360*self.pixel_per_deg), self.Y_mean,color='black')
         if test_mode ==True:
-            self.line_D, = self.ax_D.plot(np.arange(-self.X/2, +self.X/2), self.Y_mean,color='black')
+            self.line_D, = self.ax_D.plot(np.linspace(-180, +180,360*self.pixel_per_deg), self.Y_mean,color='black')
         self.text_x_retrieved = self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=12)
         self.text_average_spectra = self.ax.text(0.1, 0.95, "", transform=self.ax.transAxes, fontsize=12)
         if test_mode == True:
@@ -188,6 +194,8 @@ class Signal:
             self.text_sigma_local_sigma =               self.ax.text(0.1, 0.5, "", transform=self.ax.transAxes, fontsize=10)
 
         self.ax.set_ylim(-0.5, 3)
+        self.ax.set_xlim(-180, 180)
+        self.ax.set_xticks(np.arange(-180, 181, 60))  # Adjust the step as needed
         if test_mode ==True:
             self.ax_D.set_ylim(-0.5, 700)
         
@@ -209,13 +217,13 @@ class Signal:
     def get_Sigma(self):
         self.Sigma = []
         for r in self.r:
-            self.Sigma.append(self.Sigma_aquisition_factor*r) 
+            self.Sigma.append(self.Sigma_aquisition_factor*r*self.pixel_per_deg) 
 
     def get_Sigma_local(self):
         self.Sigma_local = []
 
         for r in self.r:
-            self.Sigma_local.append(self.Sigma_local_aquisition_factor*r) 
+            self.Sigma_local.append(self.Sigma_local_aquisition_factor*r*self.pixel_per_deg) 
 
     def reset_single_spectrum(self):
         self.Y = np.zeros(self.X)
@@ -247,7 +255,7 @@ class Signal:
                 #calculate local peak parameters:
                 
                 I_local = np.random.normal(self.I[j], self.I[j]*self.I_sigma)# we draw from a gaussian centered at I with  a sigma of 0.5I
-                x_local = np.random.normal(self.x[j], self.Sigma[j])
+                x_local = np.random.normal(self.x[j]*self.pixel_per_deg, self.Sigma[j])
                 sigma_local = np.random.normal(self.Sigma_local[j], self.Sigma_local[j]*self.Sigma_local_sigma)
 
                 # Add them together in the I spectrum             
@@ -256,7 +264,7 @@ class Signal:
                 
                 # Change the D spectrum: 
                 d_local = self.fuck_d(self.r[j])
-                self.D[int(x_local- 1.5*sigma_local)-180:int(x_local+1.5*sigma_local)-180] = d_local  
+                self.D[int(x_local- 1.5*sigma_local*self.pixel_per_deg)-180*self.pixel_per_deg:int(x_local+1.5*sigma_local*self.pixel_per_deg)-180*self.pixel_per_deg] = d_local  
 
                 j += 1 
 
@@ -578,14 +586,6 @@ def get_and_send_Positions():
     if running == True:
          threading.Timer(1, get_and_send_Positions).start()
 
-##### Test ####
-
-#extracted = {"Name": "enemy1", "x": -100, "y": 300}
-#data.append(extracted)
-
-
-
-
 def test_initialize():
     global running 
 
@@ -659,7 +659,7 @@ def test():
 
 
 running = True
-test_mode = False
+test_mode = True
 Signal_X = Signal(test_mode)
 
 if test_mode == True:

@@ -9,6 +9,10 @@ import math
 import serial
 import os
 
+# V Schiff = 5m/s
+# V Torpedo 13-20m/s
+
+
 # initializing pygame
 pygame.init()
 
@@ -18,7 +22,12 @@ try:
 except:
     pass
 ##### Communication #####
-def handle_client(conn, addr):
+def handle_client(conn, addr,Controler):
+
+    ship = Controler.ship
+    Enemys = Controler.Enemys
+    Torpedos = Controler.Torpedos
+    Detections = Controler.Detections
     #print(f"Connected by {addr}")
     # Unterscheidung nach IP einbauen erkennen wer sich verbunden hat und dann nur das schicken was benötigt wird. 
     # Da es erstmal nur den Sensor gibt passen wir alles auf den Sensor an 
@@ -85,7 +94,7 @@ def handle_client(conn, addr):
                     
                     for i in range(len(x)):
                         new = detection(x[i],y[i],u[i],100)
-                        detections.append(new)
+                        Detections.append(new)
 
             if command["ID"] == "Amarium":
 
@@ -98,7 +107,7 @@ def handle_client(conn, addr):
         print("Connection closed")
         conn.close()
 
-def server_program():
+def server_program(Controler):
     HOST = "0.0.0.0"
     PORT = 8080
 
@@ -109,7 +118,7 @@ def server_program():
 
         while True:
             conn, addr = s.accept()
-            threading.Thread(target=handle_client, args=(conn, addr)).start()
+            threading.Thread(target=handle_client, args=(conn, addr,Controler)).start()
 
 def Hardware_listener():
     while True:
@@ -124,7 +133,7 @@ class Player:
     def __init__(self,Controler):
         
         self.Controler = Controler
-        
+        self.gamespeed = Controler.gamespeed
         self.Image = 'data/Uboot.png'
         self.scale = (10,40)
         self.hp = 100
@@ -137,11 +146,7 @@ class Player:
         self.schub = 0
         self.cooldown = 0
 
-    def acceleration(self):
-     
-     a = self.schub * 0.001 # Später hier funktion einfügen 
-     
-     return a
+
     
     def check_input(self):
         keys = pygame.key.get_pressed()  # Checking pressed keys
@@ -158,19 +163,27 @@ class Player:
             self.a = self.acceleration()
         elif keys[pygame.K_DOWN]:
             if self.schub > -100:
-                self.schub -= 1
+                self.schub -= 10
             self.a = self.acceleration()
             
         if keys[pygame.K_SPACE]:
             self.Launch_Torpedo()
-
+    
+    def acceleration(self):
+        
+        a = self.schub * 0.0003 # bei schub 100% ist a = 0.3 heißt bei 10FPS  10sek von 0-5m/s (Numerisch berechnert von chat gpt)
+        return a
+    
     def calculatePosition(self):
 
         self.check_input()
         self.phi += 0.05*self.v*self.ruder # vektorzerlegung wenn phi = 45 --> naja anyway geht auch so 
         self.phi = np.round(self.phi,2)
-        self.v = self.v + self.a - (0.2 * self.v) #0.2 heißt bei 50 schub is a = 0.5 --> vmax = 2.5 damit es sich ausgleicht
+        k = 0.06 # = 0.3/5 a_max/v_max
 
+        self.v = self.v + self.a - (k * self.v) 
+
+        
         self.v = np.round(self.v,3)
         # Player Moveent 
         self.v_x = math.sin(math.radians(self.phi)) * self.v 
@@ -190,7 +203,7 @@ class Player:
         
         if self.cooldown == 0:
             # Deafult Zünder auf 
-            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.x, self.y,self.phi, 10, 250 )
+            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), 250 )
 
             self.cooldown += 50
 
@@ -264,7 +277,7 @@ class Enemy:
            
            distance = math.sqrt((math.pow(self.x - self.ship.x,2)) + (math.pow(self.y - self.ship.y,2)))
            
-           v_torpedo = 1
+           v_torpedo = 1.2
            Zeitzünder = int(distance/v_torpedo + np.random.uniform(50, 50))
            #print("Zeitzünder: ",Zeitzünder)
            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, v_torpedo , (10,10),Zeitzünder)
@@ -307,7 +320,7 @@ class Torpedo:
         self.x = x
         self.y = y 
         self.phi = phi
-        self.v = v
+        self.v = 1.2 # 12m/s
         self.v_x = 0
         self.v_y = 0 
         
@@ -464,7 +477,7 @@ class GameControler:
         self.screen = pygame.display.set_mode((screen_width, screen_height))
         
         # Game properties
-        self.gamespeed = 10
+        self.gamespeed = 2
         self.running = True 
 
         # Clock for controlling the framerate
@@ -578,7 +591,7 @@ class GameControler:
         
 Controler = GameControler()
 
-#threading.Thread(target=server_program, daemon=True).start()
+#threading.Thread(target=server_program(Controler), daemon=True).start()
 #threading.Thread(target=Hardware_listener, daemon=True).start()
 
 

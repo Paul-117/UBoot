@@ -25,6 +25,7 @@ def get_game_state():
     PORT = 8080
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        print("connected")
         s.connect((HOST, PORT))
         command = json.dumps({"type": "get","ID": "Sensorium"}).encode('utf-8')
         s.sendall(command)
@@ -309,15 +310,15 @@ class Signal:
 
         X_above_Threashold = np.arange(-self.X/2,self.X/2)[self.Y_mean > self.Threashold]
         
-        jump_indices = np.where(np.diff(X_above_Threashold) > 10 )[0]
+        jump_indices = np.where(np.diff(X_above_Threashold) > 3*self.pixel_per_deg )[0]
         # Split the array at the jumps
         self.Above_Threashold_Regions = np.split(X_above_Threashold, jump_indices + 1)
                          
         for region in self.Above_Threashold_Regions:
             if len(region) > 1:
-                a = -180 + int(region[0]) # region sind die x werte diese gehen von -180 bis 180 wir wollen aber die array indices 
-                b = -180 + int(region[-1])
-
+                a = (-180 + int(region[0]) )*self.pixel_per_deg # region sind die x werte diese gehen von -180 bis 180 wir wollen aber die array indices 
+                b = (-180 + int(region[-1]) )*self.pixel_per_deg
+                print(a,b)
                 self.x_retrieved.append(int(region[0] + (region[-1] - region[0] )/2 ))
                 self.x_retrieved_uncertainty.append(int(region[-1] - region[0] ))
                 #self.D_retrieved.append(int(np.mean(self.D_mean[a:b])))
@@ -659,14 +660,14 @@ def test():
 
 
 running = True
-test_mode = True
+test_mode = False
 Signal_X = Signal(test_mode)
 
 if test_mode == True:
     test_initialize()
     threading.Timer(0.1, test).start()
 else:
-    threading.Timer(0.1, get_and_send_Positions).start()
+    threading.Timer(1, get_and_send_Positions).start()
 
 
 # check Input

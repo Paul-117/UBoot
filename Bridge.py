@@ -107,7 +107,7 @@ def handle_client(conn, addr,Controler):
         print("Connection closed")
         conn.close()
 
-def server_program(Controler):
+def server_program(controler):
     HOST = "0.0.0.0"
     PORT = 8080
 
@@ -118,7 +118,7 @@ def server_program(Controler):
 
         while True:
             conn, addr = s.accept()
-            threading.Thread(target=handle_client, args=(conn, addr,Controler)).start()
+            threading.Thread(target=handle_client, args=(conn, addr, controler)).start()
 
 def Hardware_listener():
     while True:
@@ -496,6 +496,7 @@ class GameControler:
 
         self.spawn_enemys = self.call_every(self.add_enemy, 40)  # Call every 40 seconds
 
+        #self.add_enemy()
         # Start the game loop
         self.run()
     
@@ -544,11 +545,11 @@ class GameControler:
     def run(self):
 
         while self.running:
-
+            
             self.screen.fill((0, 0, 102))
             self.infoscreen()
             
-            self.spawn_enemys()
+            #self.spawn_enemys()
 
             self.ship.calculatePosition()
             self.ship.draw(self.screen)
@@ -589,9 +590,16 @@ class GameControler:
             
             self.clock.tick(10 * self.gamespeed)  # 10 FPS multiplied by the gamespeed factor
         
-Controler = GameControler()
 
-#threading.Thread(target=server_program(Controler), daemon=True).start()
+
+# Start the Controler in a separate thread
+controler = GameControler()
+controler_thread = threading.Thread(target=controler.run)
+controler_thread.start()
+
+# Start the server in a separate thread, passing the controler as an argument
+threading.Thread(target=server_program, args=(controler,), daemon=True).start()
+
 #threading.Thread(target=Hardware_listener, daemon=True).start()
 
 

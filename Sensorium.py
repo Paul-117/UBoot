@@ -128,7 +128,7 @@ class Signal:
     def __init__(self,test_mode):
 
         Range = 360 
-        self.pixel_per_deg = 2
+        self.pixel_per_deg = 1
 
         self.X = Range*self.pixel_per_deg
 
@@ -170,29 +170,33 @@ class Signal:
         
         # Plotting
         self.fig, self.ax = plt.subplots(figsize = (5,4))
+        self.ax.set_facecolor('black')
+        self.ax.grid(True, which='both', color='green', linestyle=':', linewidth=0.5)
+
         if test_mode ==True:
             self.fig_D, self.ax_D = plt.subplots(figsize = (5,4))
         
-        self.horizontal_line = self.ax.axhline(self.Threashold, color='red', linestyle='--') # We only need one 
+        self.horizontal_line = self.ax.axhline(self.Threashold, color='red', linestyle='dashed',linewidth=1) # We only need one 
         self.vertical_lines = []
         self.vertical_lines_D = []
 
 
-        self.line, = self.ax.plot(np.linspace(-180, +180,360*self.pixel_per_deg), self.Y_mean,color='black')
+        self.line, = self.ax.plot(np.linspace(-180, +180,360*self.pixel_per_deg), self.Y_mean, color='lime', linestyle='dotted', linewidth=1)
         if test_mode ==True:
             self.line_D, = self.ax_D.plot(np.linspace(-180, +180,360*self.pixel_per_deg), self.Y_mean,color='black')
         self.text_x_retrieved = self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=12)
         self.text_average_spectra = self.ax.text(0.1, 0.95, "", transform=self.ax.transAxes, fontsize=12)
         if test_mode == True:
-            self.text_r =                               self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_Noise =                           self.ax.text(0.1, 0.85, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_I =                               self.ax.text(0.1, 0.8, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_Sigma =                           self.ax.text(0.1, 0.75, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_Sigma_aquisition_factor =         self.ax.text(0.1, 0.7, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_I_aquisition_factor =             self.ax.text(0.1, 0.65, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_I_sigma =                          self.ax.text(0.1,0.6, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_sigma_local_aquisition_factor =   self.ax.text(0.1, 0.55, "", transform=self.ax.transAxes, fontsize=10)
-            self.text_sigma_local_sigma =               self.ax.text(0.1, 0.5, "", transform=self.ax.transAxes, fontsize=10)
+            c = "lime"
+            self.text_r =                               self.ax.text(0.1, 0.9, "", transform=self.ax.transAxes, color = c, fontsize=10)
+            self.text_Noise =                           self.ax.text(0.1, 0.85, "", transform=self.ax.transAxes,color = c, fontsize=10)
+            self.text_I =                               self.ax.text(0.1, 0.8, "", transform=self.ax.transAxes, color = c,fontsize=10)
+            self.text_Sigma =                           self.ax.text(0.1, 0.75, "", transform=self.ax.transAxes, color = c,fontsize=10)
+            self.text_Sigma_aquisition_factor =         self.ax.text(0.1, 0.7, "", transform=self.ax.transAxes, color = c,fontsize=10)
+            self.text_I_aquisition_factor =             self.ax.text(0.1, 0.65, "", transform=self.ax.transAxes, color = c,fontsize=10)
+            self.text_I_sigma =                          self.ax.text(0.1,0.6, "", transform=self.ax.transAxes, color = c,fontsize=10)
+            self.text_sigma_local_aquisition_factor =   self.ax.text(0.1, 0.55, "", transform=self.ax.transAxes, color = c,fontsize=10)
+            self.text_sigma_local_sigma =               self.ax.text(0.1, 0.5, "", transform=self.ax.transAxes, color = c,fontsize=10)
 
         self.ax.set_ylim(-0.5, 3)
         self.ax.set_xlim(-180, 180)
@@ -362,7 +366,7 @@ class Signal:
         return self.fig, self.ax
 
     def add_vertical_line(self, x_position):
-        line = self.ax.axvline(x_position, color='red', linestyle='-')
+        line = self.ax.axvline(x_position, color='red', linestyle='dashed', linewidth=1)
         self.vertical_lines.append(line)
 
     def add_vertical_line_D(self, x_position):
@@ -660,7 +664,7 @@ def test():
 
 
 running = True
-test_mode = False
+test_mode = True
 Signal_X = Signal(test_mode)
 
 if test_mode == True:

@@ -135,7 +135,7 @@ class Player:
         self.Controler = Controler
         self.gamespeed = Controler.gamespeed
         self.Image = 'data/Uboot.png'
-        self.scale = (10,40)
+        self.scale = (20,40)
         self.hp = 100
         self.x = 0
         self.y = 0 
@@ -144,9 +144,9 @@ class Player:
         self.v = 0
         self.a = 0 
         self.schub = 0
-        self.cooldown = 0
-
-
+        self.Turret_Angle = 0 
+        self.Secondary_Torpedo_cooldown = 0
+        self.Primary_Torpedo_cooldown = 0
     
     def check_input(self):
         keys = pygame.key.get_pressed()  # Checking pressed keys
@@ -167,8 +167,21 @@ class Player:
             self.a = self.acceleration()
             
         if keys[pygame.K_SPACE]:
-            self.Launch_Torpedo()
-    
+            self.Launch_Primary_Torpedo()
+        
+        if keys[pygame.K_t]:
+            self.Launch_Secondary_Torpedo()
+
+        if keys[pygame.K_f]:
+            self.Turret_Angle -= 1
+            if self.Turret_Angle < -180:
+                self.Turret_Angle = 180
+
+        if keys[pygame.K_h]:
+            self.Turret_Angle += 1
+            if self.Turret_Angle > 180:
+                self.Turret_Angle = -180
+        
     def acceleration(self):
         
         a = self.schub * 0.0003 # bei schub 100% ist a = 0.3 heißt bei 10FPS  10sek von 0-5m/s (Numerisch berechnert von chat gpt)
@@ -196,16 +209,32 @@ class Player:
         self.y = np.round(self.y,3)
 
         #print(ship.v_x,ship.v_y)
-        if self.cooldown > 0:
-            self.cooldown -=1
-   
-    def Launch_Torpedo(self):
         
-        if self.cooldown == 0:
+        if self.Primary_Torpedo_cooldown > 0:
+            self.Primary_Torpedo_cooldown -= 1
+
+        if self.Secondary_Torpedo_cooldown > 0:
+            self.Secondary_Torpedo_cooldown -= 1
+
+    def Launch_Primary_Torpedo(self):
+        
+        if self.Primary_Torpedo_cooldown == 0:
             # Deafult Zünder auf 
             Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), 250 )
 
-            self.cooldown += 50
+            self.Primary_Torpedo_cooldown += 100
+
+    def Launch_Secondary_Torpedo(self):
+        
+        if self.Secondary_Torpedo_cooldown == 0:
+            # Deafult Zünder auf 
+            phi = self.phi + self.Turret_Angle
+            if phi < -180:
+                phi = 360 - phi 
+            print(phi)
+            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, phi, 1, (10,10), 250 )
+
+            self.Secondary_Torpedo_cooldown += 100
 
     def draw(self,screen):
             
@@ -271,7 +300,6 @@ class Enemy:
         self.phi = np.random.uniform(angle-15 , angle+15)
         self.v_x = math.sin(math.radians(self.phi)) * v
         self.v_y = math.cos(math.radians(self.phi)) * v 
-
 
     def fire_Torpedo(self):
            
@@ -441,10 +469,10 @@ class Line:
         
         self.x_spacing = np.arange(0,1000,100)
         self.y_spacing = np.arange(0,1000,100)
-        print(self.x_spacing)
+
 
     def draw(self,ship,screen):
-        color = (102,255,178)
+        color = (0,150,0)
         for i in self.y_spacing:
 
             if i-ship.y > 1000:
@@ -464,9 +492,7 @@ class Line:
                 j +=1000
 
             pygame.draw.line(screen, color, (j-ship.x, 0), (j-ship.x, 1000))
-        
-        pygame.display.flip()  
-
+      
 class GameControler:
   
     def __init__(self):
@@ -477,7 +503,7 @@ class GameControler:
         self.screen = pygame.display.set_mode((screen_width, screen_height))
         
         # Game properties
-        self.gamespeed = 2
+        self.gamespeed = 1
         self.running = True 
 
         # Clock for controlling the framerate
@@ -494,12 +520,11 @@ class GameControler:
         font_path = os.path.join('data/', 'PressStart2P-Regular.ttf')  # Example path
         self.font = pygame.font.Font(font_path, 12)  # Font size can be adjusted
 
-        self.spawn_enemys = self.call_every(self.add_enemy, 40)  # Call every 40 seconds
+        self.spawn_enemys = self.call_every(self.add_enemy, 30)  # Call every 40 seconds
 
-        #self.add_enemy()
+        self.add_enemy()
         # Start the game loop
         self.run()
-    
     
     def call_every(self,function_to_call, interval_seconds):
             # Convert seconds to milliseconds
@@ -518,8 +543,7 @@ class GameControler:
     def add_enemy(self):
         
         enemy = Enemy(self,'Enemy','data/Uboot2.png',100, 0,100, 0,(0.1,0),(10,40),None,None,None,None)
-        
-         
+              
     def infoscreen(self):
 
         # You can use `render` and then blit the text surface ...
@@ -527,15 +551,25 @@ class GameControler:
         Font = self.font
         ship = self.ship
         HP = Font.render("HP: "+ str(ship.hp), True, color)
-        X = Font.render("X: "+ str(ship.x),True , color)
-        Y = Font.render("Y: "+ str(ship.y),True, color)
-        Phi = Font.render("Phi: "+ str(ship.phi),True,color)
+        Position = Font.render("X: "+ str(ship.x) +", "+ str(ship.y),True , color)
         Ruder = Font.render("Ruder: "+ str(ship.ruder),True,color)
-        V = Font.render("V: "+ str(np.round(ship.v*10,2)), True, color)
+        Phi = Font.render("Phi: "+ str(ship.phi),True,color)
         Schub = Font.render("Schub: "+ str(ship.schub) + "%", True,color)
-        Torpedo = Font.render("Torpedo: "+ str(ship.cooldown),True ,color)
-
-        items = [HP,X,Y,Phi,Ruder,V,Schub,Torpedo]
+        V = Font.render("V: "+ str(np.round(ship.v*10,2)), True, color)
+        Turret_Angle = Font.render("Geschütz Winkel: "+ str(np.round(ship.Turret_Angle,1)), True, color)
+        
+        if ship.Primary_Torpedo_cooldown == 0:
+            Torpedo_P = Font.render("Primär Torpedo: BEREIT",True ,color)
+        else:
+            Torpedo_P = Font.render("Primär Torpedo: - - -",True ,color)
+        
+        if ship.Secondary_Torpedo_cooldown == 0:
+            Torpedo_S = Font.render("Sekundär Torpedo: BEREIT",True ,color)
+        else:
+            Torpedo_S = Font.render("Sekundär Torpedo: - - -",True ,color)
+        
+        items = [HP,Position,Ruder,Phi,Ruder,V,Schub,Turret_Angle, Torpedo_P,Torpedo_S]
+        
         text_spacing = np.arange(10,len(items)*30,30)
 
         for i,j in enumerate(items):
@@ -546,10 +580,13 @@ class GameControler:
 
         while self.running:
             
-            self.screen.fill((0, 0, 102))
+            self.screen.fill((0, 0, 0))
+
+
+
             self.infoscreen()
             
-            #self.spawn_enemys()
+            self.spawn_enemys()
 
             self.ship.calculatePosition()
             self.ship.draw(self.screen)
@@ -579,8 +616,6 @@ class GameControler:
             
             # Draw the Background Lines 
             self.line.draw(self.ship,self.screen)
-
-
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:

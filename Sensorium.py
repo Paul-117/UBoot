@@ -664,7 +664,7 @@ def test():
 
 
 running = True
-test_mode = True
+test_mode = False
 Signal_X = Signal(test_mode)
 
 if test_mode == True:

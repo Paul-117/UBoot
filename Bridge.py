@@ -95,6 +95,7 @@ def handle_client(conn, addr,Controler):
                     for i in range(len(x)):
                         new = detection(x[i],y[i],u[i],100)
                         Detections.append(new)
+                    
 
             if command["ID"] == "Amarium":
 
@@ -135,7 +136,7 @@ class Player:
         self.Controler = Controler
         self.gamespeed = Controler.gamespeed
         self.Image = 'data/Uboot.png'
-        self.scale = (20,40)
+        self.scale = (30,40)
         self.hp = 100
         self.x = 0
         self.y = 0 
@@ -147,6 +148,7 @@ class Player:
         self.Turret_Angle = 0 
         self.Secondary_Torpedo_cooldown = 0
         self.Primary_Torpedo_cooldown = 0
+        self.Zeitzünder = 200
     
     def check_input(self):
         keys = pygame.key.get_pressed()  # Checking pressed keys
@@ -169,18 +171,27 @@ class Player:
         if keys[pygame.K_SPACE]:
             self.Launch_Primary_Torpedo()
         
-        if keys[pygame.K_t]:
+        if keys[pygame.K_q]:
             self.Launch_Secondary_Torpedo()
 
-        if keys[pygame.K_f]:
+        if keys[pygame.K_a]:
             self.Turret_Angle -= 1
             if self.Turret_Angle < -180:
                 self.Turret_Angle = 180
 
-        if keys[pygame.K_h]:
+        if keys[pygame.K_d]:
             self.Turret_Angle += 1
             if self.Turret_Angle > 180:
                 self.Turret_Angle = -180
+        
+        if keys[pygame.K_w]:
+            self.Zeitzünder += 10
+
+        
+        if keys[pygame.K_s]:
+            if self.Zeitzünder > 0:
+                self.Zeitzünder -= 10
+
         
     def acceleration(self):
         
@@ -220,7 +231,7 @@ class Player:
         
         if self.Primary_Torpedo_cooldown == 0:
             # Deafult Zünder auf 
-            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), 2500 )
+            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.Zeitzünder )
 
             self.Primary_Torpedo_cooldown += 100
 
@@ -232,7 +243,7 @@ class Player:
             if phi < -180:
                 phi = 360 - phi 
             print(phi)
-            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, phi, 1, (10,10), 250 )
+            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, phi, 1, (10,10), self.Zeitzünder )
 
             self.Secondary_Torpedo_cooldown += 100
 
@@ -334,7 +345,6 @@ class Enemy:
         self.x += self.v_x
         self.y -= self.v_y
 
-
     def fire_Torpedo(self):
            
            distance = math.sqrt((math.pow(self.x - self.ship.x,2)) + (math.pow(self.y - self.ship.y,2)))
@@ -362,7 +372,7 @@ class Enemy:
                     if D_Object < 200:
                         self.mode = "Attack"
                         print("you made yourself an enemy")
-                        self.v = 2
+                        self.v = 0.4
         
         '''
         if self.time > 300: 
@@ -379,7 +389,6 @@ class Enemy:
         rot_rect = rot_image.get_rect(center = (500+self.x-self.ship.x,500+self.y-self.ship.y))
         screen.blit(rot_image, rot_rect) 
 
-
 class Torpedo:
   
     def __init__(self,Controler, Name, Image, x,y,phi,v,scale,Zeitzünder):
@@ -393,7 +402,7 @@ class Torpedo:
         self.x = x
         self.y = y 
         self.phi = phi
-        self.v = 1.2 # 12m/s
+        self.v = 1 
         self.v_x = 0
         self.v_y = 0 
         
@@ -492,7 +501,6 @@ class Torpedo:
 class detection:
   
     def __init__(self,x,y,radius,time):
-        Controler.Detections.append(self)
         self.x = x
         self.y = y
         self.radius = radius       
@@ -503,7 +511,7 @@ class detection:
         circle = pygame.Surface((self.radius*2, self.radius*2), pygame.SRCALPHA)
         #pygame.draw.circle(circle, (self.transparency, 0, 0, 128), (self.x, self.y), self.radius,2)
         
-        pygame.draw.circle(circle, (self.transparency, 0, 0, 128), (self.radius, self.radius), self.radius,2)
+        pygame.draw.circle(circle, (self.transparency, 0, 0, 255), (self.radius, self.radius), self.radius,2)
         screen.blit(circle, (500+self.x-ship.x -self.radius, 500+self.y-ship.y-self.radius))
         
         self.transparency -= 1
@@ -542,13 +550,18 @@ class GameControler:
   
     def __init__(self):
  
+        
+        
+        # Start the server in a separate thread, passing the controler as an argument
+        threading.Thread(target=server_program, args=(self,), daemon=True).start()
+        
         # Creating screen
-        screen_width = 1000
-        screen_height = 1000
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
+        self.screen_width = 1000
+        self.screen_height = 1000
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         
         # Game properties
-        self.gamespeed = 2
+        self.gamespeed = 1
         self.running = True 
 
         # Clock for controlling the framerate
@@ -570,7 +583,7 @@ class GameControler:
         font_path = os.path.join('data/', 'PressStart2P-Regular.ttf')  # Example path
         self.font = pygame.font.Font(font_path, 12)  # Font size can be adjusted
 
-        self.spawn_enemys = self.call_every(self.add_enemy, 30)  # Call every 40 seconds
+        self.spawn_enemys = self.call_every(self.add_enemy, 100)  # Call every 40 seconds
 
         self.add_enemy()
         # Start the game loop
@@ -658,6 +671,7 @@ class GameControler:
         Schub = Font.render("Schub: "+ str(ship.schub) + "%", True,color)
         V = Font.render("V: "+ str(np.round(ship.v*10,2)), True, color)
         Turret_Angle = Font.render("Geschütz Winkel: "+ str(np.round(ship.Turret_Angle,1)), True, color)
+        Zeitzünder = Font.render("Zeitzünder: "+ str(ship.Zeitzünder), True, color)
         
         if ship.Primary_Torpedo_cooldown == 0:
             Torpedo_P = Font.render("Primär Torpedo: BEREIT",True ,color)
@@ -669,7 +683,7 @@ class GameControler:
         else:
             Torpedo_S = Font.render("Sekundär Torpedo: - - -",True ,color)
         
-        items = [HP,Position,Ruder,Phi,Ruder,V,Schub,Turret_Angle, Torpedo_P,Torpedo_S]
+        items = [HP,Position,Ruder,Phi,Ruder,V,Schub,Turret_Angle, Torpedo_P,Torpedo_S,Zeitzünder]
         
         text_spacing = np.arange(10,len(items)*30,30)
 
@@ -677,6 +691,47 @@ class GameControler:
 
             self.screen.blit(j, (10, text_spacing[i]))        
     
+    def draw_circles(self):
+        
+        # Set circle parameters
+        radii = [30, 100, 200, 300, 400, 500]
+        center_x = self.screen_width // 2
+        center_y = self.screen_height // 2
+        line_width = 1  # Configurable line width
+
+        # Draw concentric circles and label the radii
+        for radius in radii:
+            # Draw circle
+            pygame.draw.circle(self.screen, (0,255,0), (center_x, center_y), radius, line_width)
+            
+            
+        # Draw lines from the innermost (50px) to the outermost (500px) circle
+        inner_radius = radii[0]  # 50 px
+        outer_radius = radii[-1]  # 500 px
+
+        # Horizontal lines (left and right)
+        pygame.draw.line(self.screen, (0,255,0), (center_x - outer_radius, center_y), (center_x - inner_radius, center_y), line_width)
+        pygame.draw.line(self.screen, (0,255,0), (center_x + inner_radius, center_y), (center_x + outer_radius, center_y), line_width)
+        
+        # Vertical lines (top and bottom)
+        pygame.draw.line(self.screen, (0,255,0), (center_x, center_y - outer_radius), (center_x, center_y - inner_radius), line_width)
+        pygame.draw.line(self.screen, (0,255,0), (center_x, center_y + inner_radius), (center_x, center_y + outer_radius), line_width)
+        
+        # Diagonal lines at 45 degrees (top-left to bottom-right and bottom-left to top-right)
+        for angle in [45, 135, 225, 315]:
+            radian = math.radians(angle)
+            
+            # Calculate the start points for the inner circle
+            start_x = center_x + inner_radius * math.cos(radian)
+            start_y = center_y + inner_radius * math.sin(radian)
+            
+            # Calculate the end points for the outer circle
+            end_x = center_x + outer_radius * math.cos(radian)
+            end_y = center_y + outer_radius * math.sin(radian)
+            
+            # Draw the diagonal line
+            pygame.draw.line(self.screen, (0,255,0), (start_x, start_y), (end_x, end_y), line_width)
+
     def run(self):
 
         while self.running:
@@ -684,7 +739,7 @@ class GameControler:
             self.screen.fill((0, 0, 0))
 
 
-
+            self.draw_circles()
             self.infoscreen()
             
             self.spawn_enemys()
@@ -727,14 +782,12 @@ class GameControler:
             self.clock.tick(10 * self.gamespeed)  # 10 FPS multiplied by the gamespeed factor
         
 
-
 # Start the Controler in a separate thread
 controler = GameControler()
 controler_thread = threading.Thread(target=controler.run)
 controler_thread.start()
 
-# Start the server in a separate thread, passing the controler as an argument
-threading.Thread(target=server_program, args=(controler,), daemon=True).start()
+
 
 #threading.Thread(target=Hardware_listener, daemon=True).start()
 

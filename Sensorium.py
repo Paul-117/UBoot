@@ -407,7 +407,7 @@ class Signal:
         '''
 
         self.text_average_spectra.set_text(f"Average over: {int(self.Average_Spectra)} Spectra")
-        if test_mode == True:
+        if test_mode == True and 4==3:
             self.text_r.set_text(f"R: {self.r} ")
             self.text_Noise.set_text(f"2 Noise: {np.round(self.Noise,3)} ")
             self.text_Sigma_aquisition_factor.set_text(f"3 Sigma aquisition: {np.round(self.Sigma_aquisition_factor,3)} ")
@@ -533,7 +533,7 @@ def check_input():
             #if Signal_Y.Average_Spectra > 1:
             #    Signal_Y.Average_Spectra -= 1
         
-    if keyboard.is_pressed('q'):
+    if keyboard.is_pressed('p'):
         running = False
 
     if running == True:
@@ -664,7 +664,7 @@ def test():
 
 
 running = True
-test_mode = False
+test_mode = True
 Signal_X = Signal(test_mode)
 
 if test_mode == True:

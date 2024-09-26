@@ -192,7 +192,6 @@ class Player:
             if self.Zeitzünder > 0:
                 self.Zeitzünder -= 10
 
-        
     def acceleration(self):
         
         a = self.schub * 0.0003 # bei schub 100% ist a = 0.3 heißt bei 10FPS  10sek von 0-5m/s (Numerisch berechnert von chat gpt)
@@ -231,7 +230,7 @@ class Player:
         
         if self.Primary_Torpedo_cooldown == 0:
             # Deafult Zünder auf 
-            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, 1, (10,10), self.Zeitzünder )
+            Torpedo(self.Controler,self.x, self.y, self.phi, 1, self.Zeitzünder )
 
             self.Primary_Torpedo_cooldown += 100
 
@@ -243,7 +242,7 @@ class Player:
             if phi < -180:
                 phi = 360 - phi 
             print(phi)
-            Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, phi, 1, (10,10), self.Zeitzünder )
+            Torpedo(self.Controler, self.x, self.y, phi, 1, self.Zeitzünder )
 
             self.Secondary_Torpedo_cooldown += 100
 
@@ -266,8 +265,8 @@ class Enemy:
         self.Image = 'data/Uboot2.png'
         self.scale = (10,40)
         self.hp = 100
-        self.x = P1[0]
-        self.y = P1[1]
+        self.x = 0    #P1[0]
+        self.y = -300 #P1[1]
         self.P1 = P1
         self.P2 = P2
 
@@ -275,9 +274,13 @@ class Enemy:
         self.v_x = 0
         self.v_y =0
         self.mode = "Patroling"
-        self.Patrol_direction = 1 # -1 to P1, 1 = to P2
-        
-        self.time = 90
+        self.phi_soll = 0 
+        self.Target = self.P2
+        self.Torpedo_detection_radius = 300
+        self.Player_detection_radius = 100
+
+        self.time = 0
+        self.time2 = 0 
         Controler.Enemys.append(self)
         self.Initialize_Patrol()
 
@@ -301,108 +304,172 @@ class Enemy:
         # Adjust the angle to align with expected conventions
         angle = (angle - 90) % 360
         
-        self.phi = angle
+        return angle 
+        
+    def Kurs_anpassen(self):
+        
+        # wird jeden gamestep ausgeführt 
+        #print("soll: ", int(self.phi_soll),"ist: ", int(self.phi))
+        delta_phi = self.phi_soll - self.phi
+        
+        if delta_phi > 0:
+            self.phi += 1
+        
+        if delta_phi < 0:
+            self.phi -= 1
 
-    def Initialize_Patrol(self):
-
-        if self.Patrol_direction == 1:
-            self.get_angle_towards(self.P2)
-        if self.Patrol_direction == -1:
-            self.get_angle_towards(self.P1)
-
-        self.v = 0.2
         self.v_x = math.sin(math.radians(self.phi)) * self.v
         self.v_y = math.cos(math.radians(self.phi)) * self.v 
 
+    def Initialize_Patrol(self):
+        
+        self.mode = "Patroling"
+        self.Target = self.P2
+        self.v = 0.2
+
     def Patrol(self):
-
-        self.x += self.v_x
-        self.y -= self.v_y
         
-        if self.Patrol_direction == 1: # going to P2
+        if self.Target == self.P2:
+
             D_P2 = math.sqrt((self.P2[0] - self.x) ** 2 + (self.P2[1] - self.y) ** 2)
-            if D_P2 < 10:
-                self.Patrol_direction = -1
-                self.Initialize_Patrol()
-        
-        if self.Patrol_direction == -1: # going to P2
-            D_P1 = math.sqrt((self.P1[0] - self.x) ** 2 + (self.P1[1] - self.y) ** 2)
-            if D_P1 < 10:
-                self.Patrol_direction = 1
-                self.Initialize_Patrol()
+            if D_P2 < 50:
+                self.Target = self.P1
+                print("Target:",self.P1[0], self.P1[1] )
+        if self.Target == self.P1:
 
+            D_P2 = math.sqrt((self.P1[0] - self.x) ** 2 + (self.P1[1] - self.y) ** 2)
+            if D_P2 < 50:
+                self.Target = self.P2
+                print("Target:",self.P2[0], self.P2[1] )
+    
+    def initialize_Attack(self):
+        
+        self.mode = "Player spotted"
+        
+        self.v = 0.4
+        self.Target = (self.ship.x,self.ship.y)
+        
+        # reset self.time for the torpedos 
+        self.time = 0 
+        # reset the chase timer 
+        self.time2 = 0 
+        # later insert call other ships 
+    
     def Attack(self):
 
-        if self.time%100 == 0: # also alle 10s
-            P = (self.ship.x,self.ship.y)
-            self.get_angle_towards(P)
-            self.v_x = math.sin(math.radians(self.phi)) * self.v
-            self.v_y = math.cos(math.radians(self.phi)) * self.v 
+        if self.time%10 == 0: # also alle 10s
+            angle = self.phi_soll
+            
+            distance = math.sqrt((math.pow(self.x - self.Target[0],2)) + (math.pow(self.y - self.Target[1],2)))
+            v_torpedo = 1
+            Zeitzünder = int(distance/v_torpedo + np.random.uniform(50, 50))
 
-        if self.time%300 == 0: # also alle 30s
-            self.fire_Torpedo()
+             
+            self.fire_Torpedo(angle,Zeitzünder)
+        
+    def fire_Torpedo(self,angle, Zeitzünder):
+           
+        Torpedo(self.Controler, self.x, self.y, angle, 1, Zeitzünder)
+
+    def check_for_Torpedos(self):
+        torpedos = []
+        if len(self.Torpedos) > 0:
+            for T in self.Torpedos:
+
+                D_Object = math.sqrt((T.x - self.x) ** 2 + (T.y - self.y) ** 2)  
+                if D_Object < self.Torpedo_detection_radius:
+                    torpedos.append([T.x,T.y,T.phi])
+        
+        if (len(torpedos) > 0) :
+            self.initialize_Evade(torpedos)
+        
+        # wenn alle Torpedos weg sind (erst gegenangriff) zurück zum patrollieren
+        if len(torpedos) == 0 and self.mode == "Evade":
+            
+            self.Initialize_Patrol()
+        
+    def initialize_Evade(self,Torpedos):
+        
+        self.mode = "Evade"
+        angles = []
+        self.v = 0.4
+        
+        for i in Torpedos:
+            angles.append(self.get_angle_towards((i[0],i[1])))
+            #angles.append(i[2])
+        
+        evasion_angle = np.mean(angles)
+        
+        if self.phi - evasion_angle + 90 < self.phi - evasion_angle - 90: 
+            self.phi_soll = evasion_angle + 90
+
+        if self.phi - evasion_angle - 90 < self.phi - evasion_angle + 90: 
+            self.phi_soll = evasion_angle - 90
+        
+        print("incoming",evasion_angle,"Evade:", self.phi_soll, "ist", self.phi)
+        print("")
+        
+    def check_for_Player(self):
+        
+        D_Object = math.sqrt((self.ship.x - self.x) ** 2 + (self.ship.y - self.y) ** 2)  
+        if D_Object < self.Player_detection_radius:
+            self.initialize_Attack()
+        else:
+            if self.time2 > 50: # 20s timeout 
+                self.Initialize_Patrol()
+            
+    def calculatePosition(self):
+
+        if self.time%50 == 0:
+
+            self.check_for_Torpedos()
+            #self.check_for_Player() 
+            pass     
+   
+        
+        
+        # Ist an sollwert anpassen 
+        self.Kurs_anpassen()
+        self.time += 1 
+        
+        if self.mode == "Patroling":
+                    # Neuen Kurs auf Ziel bestimmen  
+            if self.time %10 == 0:
+                self.phi_soll = self.get_angle_towards(self.Target)
+            
+            self.Patrol()
+
+        if self.mode == "Player spotted":
+            self.time2 += 1
+            self.Attack()
+
+          
         
         self.x += self.v_x
         self.y -= self.v_y
-
-    def fire_Torpedo(self):
-           
-           distance = math.sqrt((math.pow(self.x - self.ship.x,2)) + (math.pow(self.y - self.ship.y,2)))
-           
-           v_torpedo = 0.8
-           Zeitzünder = int(distance/v_torpedo + np.random.uniform(50, 50))
-           #print("Zeitzünder: ",Zeitzünder)
-           Torpedo(self.Controler,"Torpedo",'data/Torpedo.png', self.x, self.y, self.phi, v_torpedo , (10,10),Zeitzünder)
-
-    def calculatePosition(self):
-         
-        if self.mode == "Patroling":
-            self.Patrol()
-
-        if self.mode == "Attack":
-            
-            self.Attack()
-
-        self.time += 1   
-        if len(self.Torpedos) > 0:
-            if self.mode != "Attack":
-                for T in self.Torpedos:
-
-                    D_Object = math.sqrt((T.x - self.x) ** 2 + (T.y - self.y) ** 2)  
-                    if D_Object < 200:
-                        self.mode = "Attack"
-                        print("you made yourself an enemy")
-                        self.v = 0.4
         
-        '''
-        if self.time > 300: 
-            print("Torpedo fired")
-            self.fire_Torpedo()
-            self.time = 0 
-        '''
-
     def draw_Ground_Truth(self,screen):
   
         Image = pygame.image.load(self.Image)
         Image = pygame.transform.scale(Image, self.scale)
-        rot_image = pygame.transform.rotate(Image, self.phi+90)#rot_image = pygame.transform.rotate(Image, -instance.phi_detected)
+        rot_image = pygame.transform.rotate(Image, -self.phi)#rot_image = pygame.transform.rotate(Image, -instance.phi_detected)
         rot_rect = rot_image.get_rect(center = (500+self.x-self.ship.x,500+self.y-self.ship.y))
         screen.blit(rot_image, rot_rect) 
 
 class Torpedo:
   
-    def __init__(self,Controler, Name, Image, x,y,phi,v,scale,Zeitzünder):
+    def __init__(self,Controler, x, y ,phi, v,Zeitzünder):
 
         self.Controler = Controler
         self.ship = Controler.ship
 
-        self.Name = Name
-        self.Image = Image
-        self.scale = scale
+        
+        self.Image = 'data/Torpedo.png'
+        self.scale = (10,10)
         self.x = x
         self.y = y 
         self.phi = phi
-        self.v = 1 
+        self.v = v
         self.v_x = 0
         self.v_y = 0 
         
@@ -561,7 +628,7 @@ class GameControler:
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         
         # Game properties
-        self.gamespeed = 1
+        self.gamespeed = 5
         self.running = True 
 
         # Clock for controlling the framerate
@@ -577,9 +644,9 @@ class GameControler:
 
         # Define Sectors: 
         # Sector 1:
-        self.sector_1 = [[-500,500],[500,-500]]
-        self.P1 = (0,0)
-        self.P2 = (100,100)
+        self.sector_1 = [[-00,100],[0,-300]]
+        self.P1 = (-200,-300)
+        self.P2 = (200,-300)
         font_path = os.path.join('data/', 'PressStart2P-Regular.ttf')  # Example path
         self.font = pygame.font.Font(font_path, 12)  # Font size can be adjusted
 
@@ -636,7 +703,7 @@ class GameControler:
         P1 = (P1_x,P1_y)
         P2 = (P2_x,P2_y)
 
-        print(P1,P2)
+        print("Patrol Points: ", P1,P2)
 
         return P1,P2    
     
@@ -655,7 +722,9 @@ class GameControler:
             return wrapper
 
     def add_enemy(self):
-        P1,P2 = self.calculate_Points()
+        #P1,P2 = self.calculate_Points()
+        P1 = self.P1
+        P2 = self.P2
         enemy = Enemy(self,P1, P2)
               
     def infoscreen(self):

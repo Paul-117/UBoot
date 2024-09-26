@@ -1,85 +1,105 @@
-import pygame
 import math
+import numpy as np
 
-# Initialize Pygame
-pygame.init()
+# Define the torpedo's position and heading
+x_T = 0
+y_T = -100
+phi_T = 3  # Torpedo heading (0 degrees = positive y direction)
+Torpedo = (x_T, y_T, phi_T)
 
-# Set up display
-screen_width = 1000
-screen_height = 1000
-screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Concentric Circles with Lines and Labels")
+# Define the ship's position and heading
+x_S = 0
+y_S = 0
+phi_S = 0  # Ship heading (90 degrees = positive x direction)
+Ship = (x_S, y_S, phi_S)
 
-# Set colors
-GREEN = (255,182,65)
-WHITE = (255, 255, 255)
+# Safety distance for torpedo boundaries
+torpedo_safety_distance = 50  # 50 units for torpedo safety distance
 
-# Set circle parameters
-radii = [30, 100, 200, 300, 400, 500]
-center_x = screen_width // 2
-center_y = screen_height // 2
-line_width = 1  # Configurable line width
+# Calculate safety boundaries based on the torpedo's heading
+dy = math.sin(math.radians(phi_T)) * torpedo_safety_distance
+dx = math.cos(math.radians(phi_T)) * torpedo_safety_distance
 
-# Set font for displaying radius
-font = pygame.font.SysFont(None, 24)
+# Calculate the left and right boundaries for safety
+saftey_L = (x_T - dx, y_T + dy, phi_T)  # Left safety boundary
+saftey_R = (x_T + dx, y_T - dy, phi_T)  # Right safety boundary
+#saftey_L = (50,150,45)
+print("Left Safety Boundary:", saftey_L)
+print("Right Safety Boundary:", saftey_R)
 
-# Main loop
-running = True
+# Generate possible courses for the ship
+ship_possible_courses = []
 
-def draw_circles():
-    # Set circle parameters
-    radii = [30, 100, 200, 300, 400, 500]
-    center_x = screen_width // 2
-    center_y = screen_height // 2
-    line_width = 2  # Configurable line width
+for i in range(4):
+    ship_possible_courses.append([x_S, y_S, phi_S + i * 90])  # 0, 90, 180, 270 degrees
 
-    # Draw concentric circles and label the radii
-    for radius in radii:
-        # Draw circle
-        pygame.draw.circle(screen, GREEN, (center_x, center_y), radius, line_width)
-        
-        
-    # Draw lines from the innermost (50px) to the outermost (500px) circle
-    inner_radius = radii[0]  # 50 px
-    outer_radius = radii[-1]  # 500 px
 
-    # Horizontal lines (left and right)
-    pygame.draw.line(screen, GREEN, (center_x - outer_radius, center_y), (center_x - inner_radius, center_y), line_width)
-    pygame.draw.line(screen, GREEN, (center_x + inner_radius, center_y), (center_x + outer_radius, center_y), line_width)
+def check_intersection(V1, V2, threashold):
     
-    # Vertical lines (top and bottom)
-    pygame.draw.line(screen, GREEN, (center_x, center_y - outer_radius), (center_x, center_y - inner_radius), line_width)
-    pygame.draw.line(screen, GREEN, (center_x, center_y + inner_radius), (center_x, center_y + outer_radius), line_width)
+    x1, y1, phi1 = V1  # Ship's position and heading
+    x2, y2, phi2 = V2  # Torpedo's position and heading
     
-    # Diagonal lines at 45 degrees (top-left to bottom-right and bottom-left to top-right)
-    for angle in [45, 135, 225, 315]:
-        radian = math.radians(angle)
-        
-        # Calculate the start points for the inner circle
-        start_x = center_x + inner_radius * math.cos(radian)
-        start_y = center_y + inner_radius * math.sin(radian)
-        
-        # Calculate the end points for the outer circle
-        end_x = center_x + outer_radius * math.cos(radian)
-        end_y = center_y + outer_radius * math.sin(radian)
-        
-        # Draw the diagonal line
-        pygame.draw.line(screen, GREEN, (start_x, start_y), (end_x, end_y), line_width)
+    # Direction vectors based on the headings
+    dir1 = (np.sin(np.radians(phi1)), np.cos(np.radians(phi1)))  # Ship direction
+    dir2 = (np.sin(np.radians(phi2)), np.cos(np.radians(phi2)))  # Torpedo direction
+    
+    #print(dir1, dir2)
+    # Setup the matrix A and vector B for solving
+    A = np.array([[dir1[0], -dir2[0]], 
+                  [dir1[1], -dir2[1]]])
+    B = np.array([x2 - x1, 
+                  y2 - y1])
+
+    try:
+        # Solve for t1 and t2
+        t1, t2 = np.linalg.solve(A, B)
+        #print(t1,t2)
+        if t1 > 0 and t2 > 0 and t2 < threashold:
+            return True
+        else: 
+            return False
+    except np.linalg.LinAlgError:
+        return False  # The lines are parallel or identical
 
 
+  # Define a separate safety distance for collision checks
 
-while running:
-    screen.fill((0,0,0))  # Fill background with white color
+# Function to find the closest angle
+def find_closest_angle(angles, phi):
+    # Extract the last element (angle) from each sub-list
+    angle_values = [angle[2] for angle in angles]
+    
+    # Calculate the absolute differences
+    differences = [min((angle - phi) % 360, (phi - angle) % 360) for angle in angle_values]
+    
+    # Get the index of the minimum difference
+    closest_index = np.argmin(differences)
+    
+    return angles[closest_index]  # Return the whole sub-list for the closest angle
+'''
+# Example Usage
+C1 = (0, 0, 90)  # Ship: starting at (0, 0), heading right (90 degrees)
+print(saftey_L)
+C2 = (saftey_L)  # Torpedo: starting at (50, -100), heading up (0 degrees)
+collision = check_intersection(C1, C2, 500)
+print("Collision:", collision)
 
-    draw_circles()
+'''
+collision_safety_distance = 500  # Safety distance for collision checks  
 
-    # Event handling to close the window
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+evasive_courses = []
+# Check each possible course of the ship against the left safety boundary of the torpedo
+for course in ship_possible_courses:
+    #check_L = False
+    print("Course Ship:", course, "Course Torpedo (Left Boundary):", saftey_L)
+    check_L = check_intersection(course, saftey_L, collision_safety_distance)  # Use distinct collision safety distance
+    print("Course Ship:", course, "Course Torpedo (Right Boundary):", saftey_R)
+    check_R = check_intersection(course, saftey_R, collision_safety_distance)  # Use distinct collision safety distance
+    
+    
+    if check_L == False and check_R == False:
+        evasive_courses.append(course)
+print(evasive_courses)
 
-    # Update the display
-    pygame.display.update()
-
-# Quit Pygame
-pygame.quit()
+#a = find_closest_angle(evasive_courses, phi_S )
+#print(a)

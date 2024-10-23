@@ -157,7 +157,7 @@ class Player:
         self.phi = 0
         self.ruder = 0
         self.v = 0
-        self.v_max = 10
+        self.v_max = 3
         
         self.schub = 0
         self.Turret_Angle = 0 
@@ -221,7 +221,7 @@ class Player:
         
         a = self.acceleration()
         k = 0.0045/(self.v_max/10)
-        print(a,k)
+        
 
         self.v = self.v + a - (k * self.v) 
 
@@ -260,7 +260,7 @@ class Player:
             phi = self.phi + self.Turret_Angle
             if phi < -180:
                 phi = 360 - phi 
-            print(phi)
+            
             Torpedo(self.Controler, "Player", self.x, self.y, phi, 1, self.Torpedo_range )
 
             self.Secondary_Torpedo_cooldown += 100
@@ -1047,7 +1047,7 @@ class GameControler:
             self.time += 1
 
             if self.time%100 == 0:
-                print(self.time/10)
+                print("Time Passed: ", self.time/10)
             self.clock.tick(10 * self.gamespeed)  # 10 FPS multiplied by the gamespeed factor
         
 

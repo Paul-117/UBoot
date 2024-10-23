@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Constants
-v_t = 5  # Desired terminal velocity in m/s
+v_t = 3  # Desired terminal velocity in m/s
 a = 0.05  # Choose a drag coefficient
 k = a / v_t  # Calculate acceleration based on the terminal velocity
 print(k)

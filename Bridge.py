@@ -286,6 +286,7 @@ class Enemy:
         self.x = 0 #P1[0]
         self.y = 0 #P1[1]
         self.phi = 0
+        self.v = 0 
         self.v_x = 0
         self.v_y = 0
         self.Target = 0
@@ -358,7 +359,7 @@ class Enemy:
         print("Player Spotted at ", self.Target, "initializing Attak")
     
     def Attack(self):
-        
+
         self.phi_soll = self.get_angle_towards(self.Target)
 
         if self.Torpedo_timer == 0: # also alle 10s
@@ -521,8 +522,7 @@ class Enemy:
             self.Torpedo_timer = 300
 
         if self.chase_Timer == 0:
-            self.mode = "Patroling"
-            self.Initialize_Patrol()
+            self.mode = "Default"       
 
     def check_for_Player(self):
         
@@ -596,6 +596,7 @@ class Leichter_Kreuzer(Enemy):
         self.y = y
         self.course = phi
         self.mode = "steady_course"
+        self.v = 0.2
 
     def loop(self):
         
@@ -603,7 +604,7 @@ class Leichter_Kreuzer(Enemy):
             self.phi_soll = self.course
             super().Kurs_anpassen()
         
-        super().default_behavior()
+        super().standard_behavior()
 
 
 
@@ -1125,6 +1126,10 @@ class GameControler:
         self.Enemys = []
         self.Torpedos = []
         self.Detections = []
+        # This is not ideal 
+        enemy = Enemy(self)#,P1, P2)
+        self.Enemys = []
+
 
         # Power distribution: 
 
@@ -1211,8 +1216,9 @@ class GameControler:
         #P1,P2 = self.calculate_Points()
         P1 = -500, -500#self.P1
         P2 = 500,-2000 #self.P2
-        enemy = Enemy(self)#,P1, P2)
-        test = Leichter_Kreuzer(self)
+        
+        
+        test = Leichter_Kreuzer(self,-300, -300,45)
     
     def spawn_Convoy(self, distance=1000):
         # Generate a random angle between 0 and 2π radians
@@ -1438,8 +1444,8 @@ class GameControler:
 
             
             for i in self.Enemys:
-                #i.calculatePosition()
-                #i.draw_Ground_Truth(self.screen)
+                i.loop()
+                i.draw_Ground_Truth(self.screen)
                 if i.hp <= 0:
                     self.Enemys.remove(i)
                     del i

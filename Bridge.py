@@ -110,6 +110,7 @@ def handle_client(conn, addr,Controler):
                 elif command["type"] == "update":
                     # Client wants to update the game state
                     Controler.PowerDistribution = command["data"]
+                    Controler.ship.v_max = 3 + Controler.PowerDistribution["Engine"]
 
             if command["ID"] == "Amarium":
 
@@ -177,12 +178,12 @@ class Player:
                 self.ruder -= 3 # Kleine Korrektur düsen damit das schiff nicht bewegungsunfähig bleibt 
         if keys[pygame.K_UP]:
             if self.schub < 100:
-                self.schub += 10
-            self.a = self.acceleration()
+                self.schub += 1
+            
         elif keys[pygame.K_DOWN]:
             if self.schub > -100:
-                self.schub -= 10
-            self.a = self.acceleration()
+                self.schub -= 1
+            
             
         if keys[pygame.K_SPACE]:
             self.Launch_Primary_Torpedo()
@@ -208,25 +209,22 @@ class Player:
             if self.Torpedo_range > 0:
                 self.Torpedo_range -= 10
 
-    def acceleration(self):
-        
-        a = self.schub * 0.00005 #keine ahnung passt in etwa 
-        return a
-    
+
     def calculatePosition(self):
 
         self.check_input()
         self.phi += 0.006*self.ruder # ~60s für 180°
         self.phi = np.round(self.phi,2)
         
-        a = self.acceleration()
-        k = 0.0045/(self.v_max/10)
+        a = self.schub * (0.00005*(self.v_max)/10) #keine ahnung passt in etwa 
+        k = 0.0045
         
 
         self.v = self.v + a - (k * self.v) 
+        
 
         
-        self.v = np.round(self.v,3)
+        self.v = np.round(self.v,5)
         # Player Moveent 
         self.v_x = math.sin(math.radians(self.phi)) * self.v 
         self.v_y = math.cos(math.radians(self.phi)) * self.v
@@ -276,20 +274,363 @@ class Player:
 
 class Enemy:
   
-    def __init__(self,Controler, P1,P2):
+    def __init__(self,Controler):
 
         self.ship = Controler.ship
         self.Torpedos = Controler.Torpedos
-        
         self.Detected_Hostile_Torpedos = []
         self.Controler = Controler
         self.Image = 'data/Uboot2.png'
         self.scale = (10/self.Controler.scale,40/self.Controler.scale)
         self.hp = 100
-        self.x = P1[0]
-        self.y = P1[1]
-        self.P1 = P1
-        self.P2 = P2
+        self.x = 0 #P1[0]
+        self.y = 0 #P1[1]
+        self.phi = 0
+        self.v_x = 0
+        self.v_y = 0
+        self.Target = 0
+        self.mode = "Default"
+        self.phi_soll = 0 
+        self.Torpedo_detection_radius = 200
+        self.Player_detection_radius = 100
+
+        self.time = 0
+        self.chase_Timer = 0 
+        self.Torpedo_timer = 0
+        Controler.Enemys.append(self)
+        
+   
+    def get_angle_towards(self,P):
+        
+        x = self.x       # Target ship x position
+        y = self.y       # Target ship y position (inverted y-axis)
+        ship_x = P[0]  # Your ship's x position
+        ship_y = P[1]  # Your ship's y position (inverted y-axis)
+
+        # Calculate direction vector from your ship to the target ship
+        dir_x, dir_y = x - ship_x, y - ship_y
+
+        # Calculate the angle in degrees
+        angle = math.degrees(math.atan2(dir_y, dir_x))
+        
+        # Adjust the angle to match the standard [0, 360) range
+        angle = (angle + 360) % 360
+        
+        # Adjust the angle to align with expected conventions
+        angle = (angle - 90) % 360
+        
+        return angle 
+        
+    def Kurs_anpassen(self):
+        
+        # Passt phi an phi_soll an 
+
+        delta_phi = (self.phi_soll - self.phi + 360) %360
+        #print(self.phi_soll, self.phi)
+         # Determine the shortest turn direction
+        if delta_phi > 180:
+            delta_phi -= 360  # Adjust for shortest turn direction
+
+        # Apply the turn: increase or decrease the heading
+        if delta_phi > 0:
+            self.phi += 1  # Turn clockwise
+        elif delta_phi < 0:
+            self.phi -= 1  # Turn counterclockwise
+
+        # Ensure phi is within [0, 360)
+        self.phi = self.phi % 360
+
+        self.v_x = math.sin(math.radians(self.phi)) * self.v
+        self.v_y = math.cos(math.radians(self.phi)) * self.v 
+   
+    def initialize_Attack(self):
+        
+        self.mode = "Player spotted"
+        
+        self.v = 0.3
+        self.Target = (self.ship.x,self.ship.y)
+        
+        # reset the chase timer 
+        self.chase_Timer = 500 
+        # start the Torpedo Timer 
+        self.Torpedo_timer = 100
+        # later insert call other ships 
+        print("Player Spotted at ", self.Target, "initializing Attak")
+    
+    def Attack(self):
+        
+        self.phi_soll = self.get_angle_towards(self.Target)
+
+        if self.Torpedo_timer == 0: # also alle 10s
+            
+            angle = self.phi_soll
+            
+            distance = math.sqrt((math.pow(self.x - self.Target[0],2)) + (math.pow(self.y - self.Target[1],2)))
+            
+            range = int(distance + np.random.uniform(50, 50))
+
+             
+            self.fire_Torpedo(angle,range)
+            self.Torpedo_timer = 300 
+        
+        if self.chase_Timer == 0:
+            self.mode = "Default"
+
+    def fire_Torpedo(self,angle, range):
+           
+        Torpedo(self.Controler,"Enemy", self.x, self.y, angle, 1, range)
+
+    def check_for_Torpedos(self):
+        
+        calculate_new_course = False 
+        
+        if len(self.Torpedos) > 0:
+            
+            for T in self.Torpedos:
+                
+                if T.Name != "Enemy":
+                
+                    D_Object = math.sqrt((T.x - self.x) ** 2 + (T.y - self.y) ** 2)  
+                    
+                    if D_Object < self.Torpedo_detection_radius:
+                        if T not in self.Detected_Hostile_Torpedos:
+                            
+                            self.Detected_Hostile_Torpedos.append(T)
+                            calculate_new_course = True
+                    
+                    if D_Object > self.Torpedo_detection_radius:
+                        if T in self.Detected_Hostile_Torpedos:
+                            self.Detected_Hostile_Torpedos.remove(T)   
+                            calculate_new_course = True     
+        # clear all torpedos from the List that have exploded 
+        for i in self.Detected_Hostile_Torpedos:
+            if i not in self.Torpedos:
+                self.Detected_Hostile_Torpedos.remove(i)
+                calculate_new_course = True
+        
+        if calculate_new_course == True:
+            
+            if len(self.Detected_Hostile_Torpedos) > 0:
+                print("Torpedo detected")
+                self.initialize_Evade(self.Detected_Hostile_Torpedos)
+                
+
+        # wenn alle Torpedos weg sind (erst gegenangriff) zurück zum patrollieren
+        if len(self.Detected_Hostile_Torpedos) == 0 and self.mode == "Evade":
+            self.initialize_counter_strike()  
+
+    def initialize_Evade(self,Torpedos):
+        
+        self.mode = "Evade"
+        Explosions = []
+        if self.Torpedo_timer == 0:
+            self.Torpedo_timer = 50 # fire a counter Torpedo at 300
+        
+        for T in Torpedos:
+        # Define the torpedo's position and heading
+            x_T = T.x
+            y_T = T.y
+            phi_T = T.phi  # Torpedo heading (0 degrees = positive y direction)
+            v_T = T.v
+
+            Explosion_t = T.range - T.time*T.v # gamesteps nach denen der Torpedo explodiert 
+            print(T.range, T.time, T.v)
+
+            Explosion_x = x_T + math.sin(math.radians(phi_T)) * v_T * Explosion_t
+            Explosion_y = y_T - math.cos(math.radians(phi_T)) * v_T * Explosion_t
+            
+            Explosions.append((Explosion_x,Explosion_y))
+            print(Explosions)
+            t = Explosion_t
+            
+
+
+        
+        velocities = [0.1,0.2,0.3]  # Speed of the ship in m/s
+        angles = np.arange(-180, 180, 45)  # Rudder positions in degrees
+        
+        T = 100  # Time to complete a 180-degree turn in seconds
+
+        distances = []
+
+        for angle in angles:
+            for v in velocities:
+                distance_local = 0 
+                for circle in Explosions:
+                    delta_phi = np.radians(angle)  # Convert rudder angle to radians
+                    if angle != 0:  # Avoid division by zero for zero angle
+                        omega = delta_phi / T  # Angular velocity
+                        R = v / omega  # Calculate turning radius
+
+                        # Parametric equations for the trajectory
+                        x = self.x + R * (1 - np.cos(omega * t))  # X position as a function of time
+                        y = self.y - R * np.sin(omega * t)  # Y position as a function of time
+                    else:
+                        # If rudder angle is 0, the ship moves in a straight line
+                        x = v * t
+                        y = np.zeros_like(t)
+                    x = self.x + R * (1 - np.cos(omega * t))  # X position as a function of time
+                    y = self.y - R * np.sin(omega * t)  # Y position as a function of time
+                    # Check when the ship exits the danger zone (circle)
+                    distance_local += np.sqrt((x - circle[0])**2 + (y - circle[1])**2)
+                    
+                # Store the exit time and angle
+                #print(angle,v, distance)
+                distances.append((angle,v, distance_local))
+
+        distances = np.array(distances)
+        best_angle = distances[np.argmax(distances[:,2]), 0]  # Angle corresponding to the minimum exit time
+        best_velocity = distances[np.argmax(distances[:, 2]), 1]
+        distance = distances[np.argmax(distances[:, 2]), 2]
+        self.phi_soll = best_angle
+        self.v = best_velocity
+        
+        print(f'Best Rudder Position: {best_angle}° with v: {best_velocity} resulting distance: {distance:.2f} .')
+    
+    def initialize_counter_strike(self):
+
+        self.mode = "Counter-Strike"
+        print("Inizialising counter Attack")
+        self.v = 0.3
+        self.chase_Timer = 500
+        actual_distance = math.sqrt((math.pow(self.x - self.ship.x,2)) + (math.pow(self.y - self.ship.y,2)))
+        uncertainty_factor = actual_distance/4
+        
+        
+        
+        rough_Player_x = np.random.uniform(self.ship.x - uncertainty_factor , self.ship.x + uncertainty_factor)
+        rough_Player_y = np.random.uniform(self.ship.y - uncertainty_factor , self.ship.y + uncertainty_factor)
+
+        self.Target = (rough_Player_x, rough_Player_y)
+        print("Targeting: ", self.Target)
+        # launch a torpedo
+
+        self.phi_soll = self.get_angle_towards(self.Target)
+    
+    def counter_strike(self):
+        
+        if self.Torpedo_timer == 0:
+            print("Launching Counter Torpedo")
+
+            angle = self.get_angle_towards((self.Target[0],self.Target[1]))
+            
+            
+            range = int(350)
+    
+            self.fire_Torpedo(angle,range)
+            self.Torpedo_timer = 300
+
+        if self.chase_Timer == 0:
+            self.mode = "Patroling"
+            self.Initialize_Patrol()
+
+    def check_for_Player(self):
+        
+        D_Object = math.sqrt((self.ship.x - self.x) ** 2 + (self.ship.y - self.y) ** 2)  
+        if D_Object < self.Player_detection_radius*self.ship.v:
+            self.initialize_Attack()
+
+    def standard_behavior(self):
+        
+        self.time += 1 
+        
+        if self.time%10 == 0:           
+            
+            self.check_for_Torpedos()
+            self.check_for_Player()      
+        
+        if self.chase_Timer > 0:
+            self.chase_Timer -=1
+
+        if self.Torpedo_timer > 0:
+            self.Torpedo_timer -= 1
+        
+        self.x += self.v_x
+        self.y -= self.v_y
+
+        if self.mode == "Counter-Strike":
+            self.counter_strike()
+
+        if self.mode == "Player spotted":
+            
+            self.Attack()
+
+    def calculatePosition(self):
+        
+
+        
+        
+
+        self.Kurs_anpassen()
+        # Timers anpassen 
+        
+
+        
+        
+        if self.mode == "Patroling":
+            # Neuen Kurs auf Ziel bestimmen  
+
+            # P1 bzw. P2 als ziel setzten 
+            self.Patrol()
+        
+        
+
+
+          
+        
+
+        
+    def draw_Ground_Truth(self,screen):
+  
+        Image = pygame.image.load(self.Image)
+        Image = pygame.transform.scale(Image, (self.scale[0]/self.Controler.scale,self.scale[1]/self.Controler.scale))
+        rot_image = pygame.transform.rotate(Image, -self.phi)#rot_image = pygame.transform.rotate(Image, -instance.phi_detected)
+        rot_rect = rot_image.get_rect(center = (500+(self.x-self.ship.x)/self.Controler.scale,500+(self.y-self.ship.y)/self.Controler.scale))
+        screen.blit(rot_image, rot_rect) 
+
+class Leichter_Kreuzer(Enemy):
+    
+    def __init__(self,Controler,x,y,phi):
+        super().__init__(Controler)
+        self.x = x
+        self.y = y
+        self.course = phi
+        self.mode = "steady_course"
+
+    def loop(self):
+        
+        if self.mode == "steady_course":
+            self.phi_soll = self.course
+            super().Kurs_anpassen()
+        
+        super().default_behavior()
+
+
+
+class Patrol_Ship(Enemy):
+    
+    def __init__(self, ):
+        super().__init__()    
+        self.Initialize_Patrol()
+
+
+class Backup_Enemy:
+  
+    def __init__(self,Controler):
+
+        self.ship = Controler.ship
+        self.Torpedos = Controler.Torpedos
+        self.type = type
+
+        self.Detected_Hostile_Torpedos = []
+        self.Controler = Controler
+        self.Image = 'data/Uboot2.png'
+        self.scale = (10/self.Controler.scale,40/self.Controler.scale)
+        self.hp = 100
+        self.x = 0 #P1[0]
+        self.y = 0 #P1[1]
+        self.P1 = 0 # P1
+        self.P2 = 0 # P2
 
         self.phi = 0
         self.v_x = 0
@@ -298,15 +639,14 @@ class Enemy:
         self.phi_soll = 0 
         self.Target = self.P2
         self.Torpedo_detection_radius = 200
-        self.Player_detection_radius = 200
+        self.Player_detection_radius = 100
 
         self.time = 0
         self.chase_Timer = 0 
         self.Torpedo_timer = 0
         Controler.Enemys.append(self)
         self.Initialize_Patrol()
-
-        
+   
     def get_angle_towards(self,P):
         
         x = self.x       # Target ship x position
@@ -555,7 +895,7 @@ class Enemy:
     def check_for_Player(self):
         
         D_Object = math.sqrt((self.ship.x - self.x) ** 2 + (self.ship.y - self.y) ** 2)  
-        if D_Object < self.Player_detection_radius:
+        if D_Object < self.Player_detection_radius*self.ship.v:
             self.initialize_Attack()
             
     def calculatePosition(self):
@@ -718,7 +1058,8 @@ class Torpedo:
 
 class detection:
   
-    def __init__(self,x,y,radius,time):
+    def __init__(self,Controler, x,y,radius,time):
+        self.Controler = Controler
         self.x = x
         self.y = y
         self.radius = radius       
@@ -727,12 +1068,32 @@ class detection:
     def draw(self,ship,screen):
          
         circle = pygame.Surface((self.radius*2, self.radius*2), pygame.SRCALPHA)
-        #pygame.draw.circle(circle, (self.transparency, 0, 0, 128), (self.x, self.y), self.radius,2)
         
-        pygame.draw.circle(circle, (self.transparency, 0, 0, 255), (self.radius, self.radius), self.radius,2)
-        screen.blit(circle, (500+self.x-ship.x -self.radius, 500+self.y-ship.y-self.radius))
+        # pygame.draw.circle(circle, (0, 255, 0,self.transparency), (self.radius, self.radius), self.radius, 2) - draw only outline 
+        pygame.draw.circle(circle, (0, 255, 0,self.transparency), (self.radius, self.radius), self.radius)
+        screen.blit(circle, (500+(self.x-ship.x -self.radius)/self.Controler.scale, 500+(self.y-ship.y-self.radius)/self.Controler.scale))
         
         self.transparency -= 1
+
+class Dummy_Sensorium:
+    
+    def __init__(self,Controler):
+        self.Enemys = Controler.Enemys
+        self.Controler = Controler
+        self.Player = Controler.ship
+
+    def ping(self):
+        for i in self.Enemys:
+
+            distance = math.sqrt((math.pow(self.Player.x - i.x,2)) + (math.pow(self.Player.y - i.y,2)))
+            Sigma = 0.1*distance/(2*self.Controler.PowerDistribution["Sensorium"]+0.1)
+            I = np.maximum(200 - 0.2*distance/(1.5*(self.Controler.PowerDistribution["Sensorium"]+0.1)), 0)
+            
+            x = np.random.normal(i.x, Sigma)
+            y = np.random.normal(i.y, Sigma)
+
+            new = detection(self.Controler, x,y,5,I)
+            self.Controler.Detections.append(new)
 
 class GameControler:
   
@@ -752,6 +1113,7 @@ class GameControler:
         self.gamespeed = 1
         self.scale = 1.1
         self.running = True 
+        self.daw_Grid = False
 
         # Clock for controlling the framerate
         self.time = 0 
@@ -766,11 +1128,11 @@ class GameControler:
 
         # Power distribution: 
 
-        self.PowerDistribution = {"Engine": 3,"Sensorium": 3, "Amarium": 3}
-
+        self.PowerDistribution = {"Engine": 1,"Sensorium": 2, "Amarium": 0}
+        self.ship.v_max += self.PowerDistribution["Engine"]
         # Define Sectors: 
         # Sector 1:
-        self.sector_1 = [[-1000,1000],[300,-2300]]
+        self.sector_1 = [[-500,500],[-300,-800]]
         font_path = os.path.join('data/', 'PressStart2P-Regular.ttf')  # Example path
         self.font = pygame.font.Font(font_path, 12)  # Font size can be adjusted
 
@@ -778,9 +1140,10 @@ class GameControler:
         self.P1, self.P2 = self.calculate_Points()
         self.add_enemy()
         # Start the game loop
+        self.Dummy_Sensorium = Dummy_Sensorium(self)
         self.run()
     
-    def calculate_Points(self,D = 1200):
+    def calculate_Points(self,D = 1700):
         sector = self.sector_1
         x1 = sector[0][0]
         x2 = sector[0][1]
@@ -846,10 +1209,21 @@ class GameControler:
 
     def add_enemy(self):
         #P1,P2 = self.calculate_Points()
-        P1 = self.P1
-        P2 = self.P2
-        enemy = Enemy(self,P1, P2)
-              
+        P1 = -500, -500#self.P1
+        P2 = 500,-2000 #self.P2
+        enemy = Enemy(self)#,P1, P2)
+        test = Leichter_Kreuzer(self)
+    
+    def spawn_Convoy(self, distance=1000):
+        # Generate a random angle between 0 and 2π radians
+        angle = random.uniform(0, 2 * math.pi)
+        course = random.uniform(0, 2 * math.pi)
+        # Calculate the new coordinates
+        x = self.ship.x + distance * math.cos(angle)
+        y = self.ship.y + distance * math.sin(angle)
+    
+        return x,y,course
+      
     def infoscreen(self):
 
         # You can use `render` and then blit the text surface ...
@@ -881,13 +1255,39 @@ class GameControler:
         else:
             Torpedo_S = Font.render("Sekundär Torpedo: - - -",True ,color)
         
-        items = [HP,Position,Ruder,Phi,Ruder,V,Schub, Engine_Power, Sensorium_Power,Torpedo_Power, Turret_Angle, Torpedo_P,Torpedo_S,Range]
         
+        
+        
+        # upper left:
+        items = [Position, Phi, Ruder]
         text_spacing = np.arange(10,len(items)*30,30)
-
         for i,j in enumerate(items):
 
             self.screen.blit(j, (10, text_spacing[i]))        
+
+
+        # upper right:
+        items = [V,Schub]
+        text_spacing = np.arange(10,len(items)*30,30)
+        for i,j in enumerate(items):
+
+            self.screen.blit(j, (850, text_spacing[i]))   
+
+
+        # lower left:
+        items = [Turret_Angle, Torpedo_P,Torpedo_S,Range]
+        
+        text_spacing = np.arange(10,len(items)*30,30)
+        for i,j in enumerate(items):
+
+            self.screen.blit(j, (10,850 + text_spacing[i]))  
+
+        # lower right:
+        items = [HP, Engine_Power, Sensorium_Power,Torpedo_Power]
+        text_spacing = np.arange(10,len(items)*30,30)
+        for i,j in enumerate(items):
+
+            self.screen.blit(j, (750,850 + text_spacing[i])) 
     
     def draw_circles(self):
         # Circle parameters
@@ -999,6 +1399,21 @@ class GameControler:
             if self.gamespeed > 0:
                 self.gamespeed -= 1
                 print(self.gamespeed)        
+
+        if keys[pygame.K_p]:
+            for i in self.Enemys:
+                print(i.x,i.y, i.phi)    
+
+        if keys[pygame.K_l]:
+            done = False
+            
+            if self.daw_Grid == False and done == False:
+                self.daw_Grid = True
+                done = True
+            
+            if self.daw_Grid == True and done == False:
+                self.daw_Grid = False
+                done = True
         
     def run(self):
 
@@ -1008,7 +1423,8 @@ class GameControler:
 
             self.check_input()
             self.draw_circles()
-            self.draw_lines()
+            if self.daw_Grid == True:
+                self.draw_lines()
             self.infoscreen()
             
             #self.spawn_enemys()
@@ -1022,8 +1438,8 @@ class GameControler:
 
             
             for i in self.Enemys:
-                i.calculatePosition()
-                i.draw_Ground_Truth(self.screen)
+                #i.calculatePosition()
+                #i.draw_Ground_Truth(self.screen)
                 if i.hp <= 0:
                     self.Enemys.remove(i)
                     del i
@@ -1042,6 +1458,9 @@ class GameControler:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+            
+            if self.time%20 == 0:
+                self.Dummy_Sensorium.ping()                
             
             pygame.display.update()
             self.time += 1

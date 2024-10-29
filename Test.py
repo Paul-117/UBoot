@@ -13,7 +13,8 @@ class Child(Parent):
         # Initialize the parent class
         super().__init__(a)  # Corrected: Call super() without passing self
 
-
+    def test(self):
+        super().move()
     # You can add new methods to the Child class here
     def new_method(self):
         super().move()

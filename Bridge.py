@@ -11,6 +11,7 @@ import os
 import keyboard  # using module keyboard
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
+from abc import ABC, abstractmethod
 # V Schiff = 5m/s
 # V Torpedo 13-20m/s
 
@@ -300,6 +301,7 @@ class Enemy:
         self.Torpedo_timer = 0
         Controler.Enemys.append(self)
         
+        
    
     def get_angle_towards(self,P):
         
@@ -375,7 +377,8 @@ class Enemy:
             self.Torpedo_timer = 300 
         
         if self.chase_Timer == 0:
-            self.mode = "Default"
+            
+            self.initialize_default_behavior()
 
     def fire_Torpedo(self,angle, range):
            
@@ -522,7 +525,7 @@ class Enemy:
             self.Torpedo_timer = 300
 
         if self.chase_Timer == 0:
-            self.mode = "Default"       
+            self.initialize_default_behavior()      
 
     def check_for_Player(self):
         
@@ -530,7 +533,7 @@ class Enemy:
         if D_Object < self.Player_detection_radius*self.ship.v:
             self.initialize_Attack()
 
-    def standard_behavior(self):
+    def standard_routine(self):
         
         self.time += 1 
         
@@ -544,7 +547,7 @@ class Enemy:
 
         if self.Torpedo_timer > 0:
             self.Torpedo_timer -= 1
-        
+        self.Kurs_anpassen()
         self.x += self.v_x
         self.y -= self.v_y
 
@@ -555,31 +558,11 @@ class Enemy:
             
             self.Attack()
 
-    def calculatePosition(self):
-        
-
-        
-        
-
-        self.Kurs_anpassen()
-        # Timers anpassen 
-        
-
-        
-        
-        if self.mode == "Patroling":
-            # Neuen Kurs auf Ziel bestimmen  
-
-            # P1 bzw. P2 als ziel setzten 
-            self.Patrol()
-        
-        
-
-
-          
-        
-
-        
+    @abstractmethod
+    def initialize_default_behavior(self):
+        # This method is intended to be implemented by each child
+        pass
+  
     def draw_Ground_Truth(self,screen):
   
         Image = pygame.image.load(self.Image)
@@ -588,31 +571,71 @@ class Enemy:
         rot_rect = rot_image.get_rect(center = (500+(self.x-self.ship.x)/self.Controler.scale,500+(self.y-self.ship.y)/self.Controler.scale))
         screen.blit(rot_image, rot_rect) 
 
-class Leichter_Kreuzer(Enemy):
+class Transport_Ship(Enemy):
     
     def __init__(self,Controler,x,y,phi):
         super().__init__(Controler)
         self.x = x
         self.y = y
         self.course = phi
-        self.mode = "steady_course"
+        self.mode = "Default"
         self.v = 0.2
+        self.initialize_default_behavior()
+
+    def initialize_default_behavior(self):
+        self.mode = "Default"
+        self.v = 0.2
+        self.phi_soll = self.course
 
     def loop(self):
-        
-        if self.mode == "steady_course":
-            self.phi_soll = self.course
-            super().Kurs_anpassen()
-        
-        super().standard_behavior()
-
-
+               
+        super().standard_routine()
 
 class Patrol_Ship(Enemy):
     
-    def __init__(self, ):
-        super().__init__()    
-        self.Initialize_Patrol()
+    def __init__(self,Controler,P1,P2):
+
+        super().__init__(Controler)
+        self.P1 = P1
+        self.P2 = P2
+        self.x = P1[0]
+        self.y = P1[1]
+
+        self.Target = P2
+        
+        self.initialize_default_behavior()
+
+
+    def initialize_default_behavior(self):
+        self.mode = "Default"
+        self.v = 0.2
+        self.Target = self.P2
+        print("Patroling")
+
+    def Patrol(self):
+        
+        if self.Target == self.P2:
+
+            D_P2 = math.sqrt((self.P2[0] - self.x) ** 2 + (self.P2[1] - self.y) ** 2)
+            if D_P2 < 50:
+                self.Target = self.P1
+                print("Target:",self.P1[0], self.P1[1] )
+        if self.Target == self.P1:
+
+            D_P2 = math.sqrt((self.P1[0] - self.x) ** 2 + (self.P1[1] - self.y) ** 2)
+            if D_P2 < 50:
+                self.Target = self.P2
+                print("Target:",self.P2[0], self.P2[1] )
+
+    def loop(self):
+               
+        super().standard_routine()
+        
+        if self.mode == "Default" and self.time%10 == 0:
+            # Neuen Kurs auf Ziel bestimmen  
+
+            # P1 bzw. P2 als ziel setzten 
+            self.Patrol()
 
 
 class Backup_Enemy:
@@ -1113,6 +1136,7 @@ class GameControler:
         # Game properties
         self.gamespeed = 1
         self.scale = 1.1
+        self.Level = 0
         self.running = True 
         self.daw_Grid = False
 
@@ -1137,18 +1161,20 @@ class GameControler:
         self.ship.v_max += self.PowerDistribution["Engine"]
         # Define Sectors: 
         # Sector 1:
-        self.sector_1 = [[-500,500],[-300,-800]]
+        self.sector_1 = [[-500,500],[-300,-2000]]
         font_path = os.path.join('data/', 'PressStart2P-Regular.ttf')  # Example path
         self.font = pygame.font.Font(font_path, 12)  # Font size can be adjusted
 
-        self.spawn_enemys = self.call_every(self.add_enemy, 100)  # Call every 40 seconds
-        self.P1, self.P2 = self.calculate_Points()
-        self.add_enemy()
+        
+        
+        
         # Start the game loop
         self.Dummy_Sensorium = Dummy_Sensorium(self)
+        #self.add_Patrol_Ship()
+        self.Level_1()
         self.run()
     
-    def calculate_Points(self,D = 1700):
+    def calculate_Points(self,D = 1000):
         sector = self.sector_1
         x1 = sector[0][0]
         x2 = sector[0][1]
@@ -1197,38 +1223,23 @@ class GameControler:
         print("Patrol Points: ", P1,P2)
 
         return P1,P2    
-    
-    def call_every(self,function_to_call, interval_seconds):
-            # Convert seconds to milliseconds
-            interval_ms = interval_seconds * 1000
-            last_time_called = pygame.time.get_ticks()
-
-            def wrapper():
-                nonlocal last_time_called
-                current_time = pygame.time.get_ticks()
-                if current_time - last_time_called >= interval_ms:
-                    function_to_call()
-                    last_time_called = current_time
-
-            return wrapper
-
-    def add_enemy(self):
-        #P1,P2 = self.calculate_Points()
-        P1 = -500, -500#self.P1
-        P2 = 500,-2000 #self.P2
         
+    def add_Transport_Ship(self, distance = 500):
         
-        test = Leichter_Kreuzer(self,-300, -300,45)
-    
-    def spawn_Convoy(self, distance=1000):
         # Generate a random angle between 0 and 2π radians
         angle = random.uniform(0, 2 * math.pi)
-        course = random.uniform(0, 2 * math.pi)
+        course = random.uniform(0,360)
         # Calculate the new coordinates
         x = self.ship.x + distance * math.cos(angle)
         y = self.ship.y + distance * math.sin(angle)
-    
-        return x,y,course
+
+        transporter = Transport_Ship(self,x,y,course)
+        return transporter
+    def add_Patrol_Ship(self):
+
+        P1,P2 = self.calculate_Points()
+     
+        patroler = Patrol_Ship(self,P1,P2)
       
     def infoscreen(self):
 
@@ -1420,7 +1431,27 @@ class GameControler:
             if self.daw_Grid == True and done == False:
                 self.daw_Grid = False
                 done = True
+    
+    def next_Level(self):
         
+        # Construct the function name
+        func_name = f"Level_{self.Level+1}"
+        # Use getattr to fetch the function by name and call it
+        func = getattr(self, func_name, None)
+        if func:
+            func()  # Call the function if it exists
+        else:
+            print(f"No such function: {func_name}")
+    
+    def Level_1(self):
+        self.Level += 1
+        ship = self.add_Transport_Ship()
+
+    def Level_2(self):
+        self.Level += 1
+        ship = self.add_Transport_Ship()
+        ship = self.add_Transport_Ship()
+    
     def run(self):
 
         while self.running:
@@ -1433,6 +1464,9 @@ class GameControler:
                 self.draw_lines()
             self.infoscreen()
             
+            # Take care of the Level stuff
+            if self.Enemys == []:
+                self.next_Level()
             #self.spawn_enemys()
 
             self.ship.calculatePosition()

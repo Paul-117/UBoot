@@ -25,12 +25,19 @@ try:
 except:
     pass
 ##### Communication #####
+connected_clients  = []
 def handle_client(conn, addr,Controler):
 
     ship = Controler.ship
     Enemys = Controler.Enemys
     Torpedos = Controler.Torpedos
     Detections = Controler.Detections
+
+    global connected_clients
+
+    # Add new connection to the list of clients
+    connected_clients.append(conn)
+
     #print(f"Connected by {addr}")
     # Unterscheidung nach IP einbauen erkennen wer sich verbunden hat und dann nur das schicken was benötigt wird. 
     # Da es erstmal nur den Sensor gibt passen wir alles auf den Sensor an 
@@ -46,6 +53,14 @@ def handle_client(conn, addr,Controler):
 
             # Decode received data
             command = json.loads(data.decode('utf-8'))
+
+            if command["ID"] == "Console":
+                if command["type"] == "get":
+                    print("Console requests Gamestate")
+                
+                if command["type"] == "update":
+                    print("Console wants to update Gamestate")
+
 
             if command["ID"] == "Infoscreen1":
 
@@ -121,6 +136,8 @@ def handle_client(conn, addr,Controler):
     except ConnectionResetError:
         print(f"Connection with {addr} was reset.")
     finally:
+        # Remove client from the list upon disconnection
+        connected_clients.remove(conn)
         print("Connection closed")
         conn.close()
 
@@ -137,13 +154,36 @@ def server_program(controler):
             conn, addr = s.accept()
             threading.Thread(target=handle_client, args=(conn, addr, controler)).start()
 
-def Hardware_listener():
+def broadcast_update(update_data):
+    global connected_clients
+    print("connected_clients", connected_clients)
+    # Convert the update data to JSON
+    update_message = json.dumps({"type": "update", "data": update_data}).encode('utf-8')
+
+    # Send the update to each connected client
+    for client in connected_clients[:]:
+        try:
+            client.sendall(update_message)
+        except Exception as e:
+            # Remove the client if sending fails
+            connected_clients.remove(client)
+
+
+def Hardware_listener(Controler):
     while True:
         if ser.in_waiting > 0:
             message = ser.readline().decode('utf-8').strip()
-            print(f'Received: {message}')
-            if message == "Fire":
-                ship.Launch_Torpedo()
+            
+            if message[0:5] == "Ruder":
+                ruder = np.round(float(message[6:]))
+                Controler.ship.ruder = ruder
+                
+
+            if message[0:5] == "Schub":
+                schub = np.round(float(message[6:]))
+                Controler.ship.schub = schub
+                
+
 
 class Player:
   
@@ -350,20 +390,24 @@ class Enemy:
         
         self.mode = "Player spotted"
         
-        self.v = 0.3
+        self.v = 0.22
         self.Target = (self.ship.x,self.ship.y)
         
         # reset the chase timer 
         self.chase_Timer = 500 
         # start the Torpedo Timer 
-        self.Torpedo_timer = 100
+        if self.Torpedo_timer == 0:
+            self.Torpedo_timer = 100
         # later insert call other ships 
         print("Player Spotted at ", self.Target, "initializing Attak")
+        for enemy in self.Controler.Enemys:
+            if enemy.mode != "Player spotted":
+                enemy.initialize_Attack()
     
     def Attack(self):
 
         self.phi_soll = self.get_angle_towards(self.Target)
-
+        
         if self.Torpedo_timer == 0: # also alle 10s
             
             angle = self.phi_soll
@@ -495,10 +539,10 @@ class Enemy:
 
         self.mode = "Counter-Strike"
         print("Inizialising counter Attack")
-        self.v = 0.3
-        self.chase_Timer = 500
+        self.v = 0.22
+        self.chase_Timer = 1200
         actual_distance = math.sqrt((math.pow(self.x - self.ship.x,2)) + (math.pow(self.y - self.ship.y,2)))
-        uncertainty_factor = actual_distance/4
+        uncertainty_factor = actual_distance/10
         
         
         
@@ -508,7 +552,9 @@ class Enemy:
         self.Target = (rough_Player_x, rough_Player_y)
         print("Targeting: ", self.Target)
         # launch a torpedo
-
+        for enemy in self.Controler.Enemys:
+            if enemy.mode != "Counter-Strike":
+                enemy.initialize_counter_strike()
         self.phi_soll = self.get_angle_towards(self.Target)
     
     def counter_strike(self):
@@ -530,7 +576,8 @@ class Enemy:
     def check_for_Player(self):
         
         D_Object = math.sqrt((self.ship.x - self.x) ** 2 + (self.ship.y - self.y) ** 2)  
-        if D_Object < self.Player_detection_radius*self.ship.v:
+        
+        if D_Object < self.Player_detection_radius*self.ship.v*10 and self.mode != "Evade" :
             self.initialize_Attack()
 
     def standard_routine(self):
@@ -541,7 +588,7 @@ class Enemy:
             
             self.check_for_Torpedos()
             self.check_for_Player()      
-        
+            
         if self.chase_Timer > 0:
             self.chase_Timer -=1
 
@@ -636,7 +683,6 @@ class Patrol_Ship(Enemy):
 
             # P1 bzw. P2 als ziel setzten 
             self.Patrol()
-
 
 class Backup_Enemy:
   
@@ -1145,8 +1191,8 @@ class GameControler:
         self.clock = pygame.time.Clock()
 
         #Game Entities
-
         self.ship = Player(self)
+        
         self.Enemys = []
         self.Torpedos = []
         self.Detections = []
@@ -1170,8 +1216,9 @@ class GameControler:
         
         # Start the game loop
         self.Dummy_Sensorium = Dummy_Sensorium(self)
+        threading.Thread(target=Hardware_listener, args=(self,), daemon=True).start()
         #self.add_Patrol_Ship()
-        self.Level_1()
+        self.Level_2()
         self.run()
     
     def calculate_Points(self,D = 1000):
@@ -1224,7 +1271,7 @@ class GameControler:
 
         return P1,P2    
         
-    def add_Transport_Ship(self, distance = 500):
+    def add_Transport_Ship(self,n,  distance = 500):
         
         # Generate a random angle between 0 and 2π radians
         angle = random.uniform(0, 2 * math.pi)
@@ -1233,8 +1280,11 @@ class GameControler:
         x = self.ship.x + distance * math.cos(angle)
         y = self.ship.y + distance * math.sin(angle)
 
-        transporter = Transport_Ship(self,x,y,course)
+        for i in range(n):
+            transporter = Transport_Ship(self,x+i*100,y,course)
+        
         return transporter
+    
     def add_Patrol_Ship(self):
 
         P1,P2 = self.calculate_Points()
@@ -1408,16 +1458,20 @@ class GameControler:
                 print(self.scale)
         
         if keys[pygame.K_u]:
-            if self.gamespeed > 0:
-                self.gamespeed += 1
+            if self.gamespeed < 10:
+                self.gamespeed += 0.1
                 print(self.gamespeed)
        
         if keys[pygame.K_j]:
             if self.gamespeed > 0:
-                self.gamespeed -= 1
+                self.gamespeed -= 0.1
+            if self.gamespeed < 1:
+                self.gamespeed = 1
                 print(self.gamespeed)        
 
         if keys[pygame.K_p]:
+            print("Pensi")
+            broadcast_update(9)
             for i in self.Enemys:
                 print(i.x,i.y, i.phi)    
 
@@ -1445,12 +1499,13 @@ class GameControler:
     
     def Level_1(self):
         self.Level += 1
-        ship = self.add_Transport_Ship()
+        ship = self.add_Transport_Ship(1)
 
     def Level_2(self):
+        print("Level 2")
         self.Level += 1
-        ship = self.add_Transport_Ship()
-        ship = self.add_Transport_Ship()
+        ship = self.add_Transport_Ship(2)
+
     
     def run(self):
 
@@ -1517,7 +1572,7 @@ controler_thread = threading.Thread(target=controler.run)
 controler_thread.start()
 
 
-#threading.Thread(target=Hardware_listener, daemon=True).start()
+#
 
 
 

@@ -71,8 +71,8 @@ class PowerDistributionManager:
 
         # Register key event listeners for Tab, Up, and Down keys
         keyboard.on_press_key('tab', self.on_tab_event)
-        keyboard.on_press_key('up', self.on_up_event)
-        keyboard.on_press_key('down', self.on_down_event)
+        keyboard.on_press_key('+', self.on_up_event)
+        keyboard.on_press_key('-', self.on_down_event)
 
     def on_tab_event(self, event):
         """Move to the next subsystem."""

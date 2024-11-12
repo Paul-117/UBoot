@@ -3,46 +3,56 @@ import json
 import threading
 import time
 
-# Global variable to store the current game state
-current_game_state = None
+def listen_for_messages(s):
+    """Thread function to continuously listen for messages from the server."""
+    try:
+        while True:
+            # Receiving messages from the server
+            data = s.recv(1024)
+            if not data:
+                print("Server disconnected.")
+                break
+            # Decode and print the message from the server
+            message = json.loads(data.decode('utf-8'))
+            print("Message from server:", message)
+    except Exception as e:
+        print("Error receiving data:", e)
+    finally:
+        s.close()
 
-def listen_for_updates():
+def client_program():
     HOST = "127.0.0.1"  # Server's IP address
     PORT = 8080
 
+    # Set up a persistent connection with the server
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
-        print("Connected to server and listening for updates...")
+        try:
+            s.connect((HOST, PORT))
+            print("Connected to server")
 
-        while True:
-            try:
-                data = s.recv(1024)
-                if not data:
-                    break
-                # Process the incoming data (updates from the server)
-                global current_game_state
-                current_game_state = json.loads(data.decode('utf-8'))
-                print("Received update:", current_game_state)
-            except Exception as e:
-                print("Error receiving data:", e)
-                break
+            # Start a separate thread to listen for incoming messages
+            threading.Thread(target=listen_for_messages, args=(s,)).start()
 
-def get_game_state():
-    global current_game_state
-    # This function can return the latest game state as stored in current_game_state
-    return current_game_state
+            # Main loop to send commands to the server
+            while True:
+                # Example of sending a 'get' command to retrieve the game state
+                command_type = input("Enter command type ('get' or 'update'): ")
+                if command_type == "get":
+                    command = json.dumps({"type": "get", "ID": "Voltarium"}).encode('utf-8')
+                    s.sendall(command)
+                elif command_type == "update":
+                    # Example 'new_state' to send
+                    new_state = {"score": 100, "level": 2}
+                    command = json.dumps({"type": "update", "ID": "Voltarium", "data": new_state}).encode('utf-8')
+                    s.sendall(command)
+                else:
+                    print("Invalid command. Please enter 'get' or 'update'.")
 
-def start_periodic_fetch():
-    # Call get_game_state periodically, every second for example
-    while True:
-        state = get_game_state()
-        print("Fetched game state:", state)
-        time.sleep(1)
+                # Small delay to avoid flooding the server with requests
+                time.sleep(0.5)
 
-# Start the listening thread to maintain a connection with the server
-listener_thread = threading.Thread(target=listen_for_updates)
-listener_thread.start()
+        except Exception as e:
+            print("Error connecting to the server:", e)
 
-# Start a separate thread to fetch the game state periodically
-fetch_thread = threading.Thread(target=start_periodic_fetch)
-fetch_thread.start()
+# Run the client program
+client_program()

@@ -1,122 +1,111 @@
 import json
 import socket
 import threading
-import time
 
-connected_clients = []
+class Display:
+    """Class responsible for analyzing and displaying messages from clients."""
+    def __init__(self):
+        print("Server Display initialized")
 
-def handle_client(conn, addr):
+    def show_message(self, addr, message):
+        """Displays the received message along with client address."""
+        print(f"Message from {addr}: {message}")
 
-    global connected_clients
+class Server:
+    """Class to handle server functions including client connections, receiving and sending messages."""
+    def __init__(self, host, port, display):
+        self.host = host
+        self.port = port
+        self.display = display
+        self.connected_clients = []  # Stores (conn, addr) tuples
 
-    connected_clients.append(conn)
-    print("cliend connected:", conn, addr)
-    print("New communication thread started")
+        # Start the server and listen for clients
+        self.start_server()
 
-    try:
+    def start_server(self):
+        """Sets up the server to accept incoming connections."""
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind((self.host, self.port))
+        self.socket.listen()
+        print("Server is listening...")
+
+        # Start a thread to accept client connections
+        threading.Thread(target=self.accept_clients, daemon=True).start()
+
+    def accept_clients(self):
+        """Accept new clients and start a handler thread for each client."""
         while True:
-            data = conn.recv(1024)
-            
-            if not data:
-                print("break")
+            conn, addr = self.socket.accept()
+            self.connected_clients.append((conn, addr))
+            print(f"Client connected from {addr}")
+
+            # Start a new thread to handle each client’s messages
+            threading.Thread(target=self.handle_client, args=(conn, addr), daemon=True).start()
+
+    def handle_client(self, conn, addr):
+        """Handles communication with a connected client."""
+        try:
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    print(f"Client {addr} disconnected.")
+                    break
+
+                # Decode and display the message from the client
+                command = json.loads(data.decode('utf-8'))
+                self.display.show_message(addr, command)
+
+
+        except ConnectionResetError:
+            print(f"Connection with {addr} was reset.")
+        finally:
+            # Clean up on disconnection
+            self.connected_clients.remove((conn, addr))
+            conn.close()
+
+    def send_message_to_client(self, addr, message):
+        """Send a custom message to a specific client by address."""
+        # Find the connection for the given address
+        for conn, client_addr in self.connected_clients:
+            if client_addr == addr:
+                try:
+                    response = json.dumps(message).encode('utf-8')
+                    conn.sendall(response)
+                    print(f"Sent message to {addr}: {message}")
+                except BrokenPipeError:
+                    print(f"Connection with {addr} lost while sending message.")
                 break
-            print("data recieved: ", data )
-            # Decode received data
-            command = json.loads(data.decode('utf-8'))
-            print("recieved:", command)
-            back = "Message recieved"
-            response = json.dumps(back).encode('utf-8')
+        else:
+            print(f"Client {addr} not found.")
 
-            
-            conn.sendall(response)
+    def broadcast_message(self, message):
+        """Send a message to all connected clients."""
+        response = json.dumps(message).encode('utf-8')
+        for conn, addr in self.connected_clients[:]:
+            try:
+                conn.sendall(response)
+                print(f"Broadcasted message to {addr}: {message}")
+            except BrokenPipeError:
+                print(f"Connection with {addr} lost while broadcasting message.")
+                self.connected_clients.remove((conn, addr))
 
-    except ConnectionResetError:
-        print(f"Connection with {addr} was reset.")
+# Usage example
+if __name__ == "__main__":
+    # Initialize the display object for the server
+    display = Display()
     
-def server_program():
-    HOST = "0.0.0.0"
-    PORT = 8080
+    # Create and start the server instance
+    server = Server("0.0.0.0", 8080, display)
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen()
-        print("Server is listening...")
+    # Example of sending a message to a specific client (you can replace with actual client addresses)
+    # Here, you'd interactively call this in response to specific events
+    # server.send_message_to_client(("127.0.0.1", 12345), "Hello Client!")
+    
+    # Example of broadcasting a message
+    # server.broadcast_message("Hello to all connected clients!")
 
-        while True:
-            conn, addr = s.accept()
-            threading.Thread(target=handle_client, args=(conn, addr)).start()
-
-
-
-server_program()
-
-
-import json
-import socket
-import threading
-
-connected_clients = []
-
-def handle_client(conn, addr):
-    global connected_clients
-
-    connected_clients.append(conn)
-    print(f"Client connected: {addr}")
-    print("New communication thread started")
-
-    # Start a separate thread to send messages to the client
-    threading.Thread(target=send_messages, args=(conn,)).start()
-
-    try:
-        while True:
-            # Receive messages from the client
-            data = conn.recv(1024)
-            if not data:
-                print("Client disconnected")
-                break
-            
-            print("Data received:", data)
-            
-            # Decode received data
-            command = json.loads(data.decode('utf-8'))
-            print("Received:", command)
-            
-            # Send automatic acknowledgment response back to the client
-            response = json.dumps("Message received").encode('utf-8')
-            conn.sendall(response)
-
-    except ConnectionResetError:
-        print(f"Connection with {addr} was reset.")
-    finally:
-        conn.close()
-        connected_clients.remove(conn)
-
-def send_messages(conn):
-    try:
-        while True:
-            # Wait for Enter press to send a message
-            input("Press Enter to send a message to the client...")
-            message = input("Enter your message: ")
-            response = json.dumps(message).encode('utf-8')
-            conn.sendall(response)
-            print("Sent message to client:", message)
-    except BrokenPipeError:
-        print("Connection lost while trying to send a message.")
-    finally:
-        conn.close()
-
-def server_program():
-    HOST = "0.0.0.0"
-    PORT = 8080
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen()
-        print("Server is listening...")
-
-        while True:
-            conn, addr = s.accept()
-            threading.Thread(target=handle_client, args=(conn, addr)).start()
-
-# Run the server program
-server_program()
+    # Keep the main thread alive
+    while True:
+        input("Press Enter to broadcast a message to all clients...\n")
+        msg = input("Enter your message: ")
+        server.broadcast_message(msg)

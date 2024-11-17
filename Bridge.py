@@ -66,9 +66,13 @@ class Server:
                 if not data_raw:
                     print(f"Client {addr} disconnected.")
                     break
+                
 
                 # Decode and display the message from the client
                 data = json.loads(data_raw.decode('utf-8'))
+
+                if data == "e":
+                    pass
                 print(f"Message recieved from: {addr} : {data}",)
                 # further process the message 
 
@@ -369,7 +373,7 @@ class Player:
         if self.Primary_Torpedo_cooldown == 0:
             # Deafult Zünder auf 
             Torpedo(self.Controler,"Player",self.x, self.y, self.phi, 1, self.Torpedo_range )
-
+            self.Controler.Torpedo_Launch.play()
             self.Primary_Torpedo_cooldown += 100
 
     def Launch_Secondary_Torpedo(self):
@@ -415,7 +419,9 @@ class Enemy:
         self.phi_soll = 0 
         self.Torpedo_detection_radius = 200
         self.Player_detection_radius = 100
-
+        self.Sound = Controler.Enemy_Motor 
+        self.Sound.play(-1)
+        self.Sound.set_volume(0)
         self.time = 0
         self.chase_Timer = 0 
         self.Torpedo_timer = 0
@@ -656,7 +662,13 @@ class Enemy:
     def check_for_Player(self):
         
         D_Object = math.sqrt((self.ship.x - self.x) ** 2 + (self.ship.y - self.y) ** 2)  
+        # Sound anpassen 
         
+        a =  max( -D_Object/1000 + 1, 0)
+        print(D_Object, a)
+        
+
+        self.Sound.set_volume(a/4)
         if D_Object < self.Player_detection_radius*self.ship.v*10 and self.mode != "Evade" :
             self.initialize_Attack()
 
@@ -664,6 +676,7 @@ class Enemy:
         
         self.time += 1 
         
+
         if self.time%10 == 0:           
             
             self.check_for_Torpedos()
@@ -1245,12 +1258,32 @@ class Dummy_Sensorium:
             new = detection(self.Controler, x,y,5,I)
             self.Controler.Detections.append(new)
 
+
 class GameControler:
   
     def __init__(self):
  
+        # Sounds
+        pygame.mixer.init()
+
         
+        self.Background_Bubbles = pygame.mixer.Sound('./sounds/Background_Bubbles.wav')
+        self.Motor = pygame.mixer.Sound('./sounds/Self_Motor.wav')
+        self.Sonar = pygame.mixer.Sound('./sounds/Sonar.wav')
+        self.Torpedo_Launch = pygame.mixer.Sound('./sounds/Torpedo.wav')
+        self.Enemy_Motor = pygame.mixer.Sound('./sounds/Enemy_Ship.wav')
+
+
+        self.Sonar.play(-1)
+        self.Sonar.set_volume(0.3)
+        self.Background_Bubbles.play(-1)
+        self.Background_Bubbles.set_volume(0)
+        self.Motor.play(-1)
+        self.Background_Bubbles.set_volume(0)
+        self.Torpedo_Launch.set_volume(1)
+
         
+
         # Start the server 
         self.server = Server("0.0.0.0", 8080, self)
         
@@ -1301,6 +1334,8 @@ class GameControler:
         #self.add_Patrol_Ship()
         self.Level_2()
         self.run()
+
+        
     
     def calculate_Points(self,D = 1000):
         sector = self.sector_1
@@ -1363,7 +1398,7 @@ class GameControler:
 
         for i in range(n):
             transporter = Transport_Ship(self,x+i*100,y,course)
-        
+                  
         return transporter
     
     def add_Patrol_Ship(self):
@@ -1591,7 +1626,15 @@ class GameControler:
     def run(self):
 
         while self.running:
-            
+
+            # Sounds
+            a = self.ship.v*10/self.ship.v_max
+            b = max(0.3,a)
+            self.Background_Bubbles.set_volume(b)
+
+            self.Motor.set_volume(self.ship.schub/(2* 100))
+
+
             self.screen.fill((0, 0, 0))
 
             self.check_input()

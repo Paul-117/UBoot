@@ -494,7 +494,7 @@ class Enemy:
                 self.Power_Distribution_ist[i] -=1
        
         if self.Charge_Weapons == True:
-            self.Torpedo_Charge += self.Power_Distribution_ist[2]*1
+            self.Torpedo_Charge += self.Power_Distribution_ist[2]*0.01
 
 
         self.v = self.Power_Distribution_ist[0]*0.01*self.v_max
@@ -508,8 +508,8 @@ class Enemy:
     def initialize_Attack(self):
         
         self.mode = "Player spotted"
+        self.Power_Distribution_soll = [30, 30, 30]
         
-        self.v = 0.22
         self.Target = (self.ship.x,self.ship.y)
         
         # reset the chase timer 
@@ -700,11 +700,9 @@ class Enemy:
         D_Object = math.sqrt((self.ship.x - self.x) ** 2 + (self.ship.y - self.y) ** 2)  
         # Sound anpassen 
         
-        a =  max( -D_Object/1000 + 1, 0)
-        
-        
-
+        a =  max( -D_Object/1000 + 1, 0)       
         self.Sound.set_volume(a/4)
+        
         if D_Object < self.Detection_radius*self.ship.v*10 and self.mode != "Evade" :
             self.initialize_Attack()
 

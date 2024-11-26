@@ -7,6 +7,19 @@ class Display:
     """Class responsible for analyzing and displaying messages from the server."""
     def __init__(self):
         print("Display initialized")
+        self.client = Client("127.0.0.1", 8080, self)
+        self.client.send({"ID": "Voltarium", "request": "Initialize"})
+        time.sleep(3)
+        self.client.send({"ID": "Voltarium", "request": "get"})
+        threading.Timer(3, self.send_distribution).start()
+
+        
+    def send_distribution(self):
+        new_distribution = {"Engine": 1,"Sensorium": 1, "Amarium": 1}
+        self.client.send({"ID": "Voltarium", "request": "update", "data": new_distribution} )
+        
+        threading.Timer(3, self.send_distribution).start()
+
 
     def show_message(self, message):
         """Analyzes and displays the received message."""
@@ -28,7 +41,7 @@ class Client:
         # Start a thread to listen for incoming messages
         self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
         self.listener_thread.start()
-        self.send("Console")
+        
 
     def connect_to_server(self):
         """Establish a connection to the server."""
@@ -75,11 +88,14 @@ class Client:
         except Exception as e:
             print("Error sending data:", e)
 
-# Usage example
-if __name__ == "__main__":
-    # Initialize the display object
-    display = Display()
-    
-    # Initialize the client with server details and the display instance
-    client = Client("127.0.0.1", 8080, display)
 
+# Initialize the display object
+display = Display()
+
+# Initialize the client with server details and the display instance
+
+
+while True:
+    input("Press Enter to broadcast a message to all clients...\n")
+    msg = input("Enter your message: ")
+    client.send(msg)

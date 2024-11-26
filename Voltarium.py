@@ -14,41 +14,83 @@ import keyboard
 import numpy as np
 
 
-def get_game_state():
-    HOST = "127.0.0.1"  # Server's IP address
-    PORT = 8080
+class Client:
+    """Class to handle client connection, message listening, and message sending."""
+    def __init__(self, host, port,Voltarium):
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        print("connected")
-        s.connect((HOST, PORT))
-        command = json.dumps({"type": "get","ID": "Voltarium"}).encode('utf-8')
-        s.sendall(command)
-        data = s.recv(1024)
-        #print(data)
-        game_state = json.loads(data.decode('utf-8'))
-        #print(f"Current game state: {game_state}")
-        print("connection closed")
-        #s.close()
-        return game_state
-
-def update_game_state(new_state):
-    HOST = "127.0.0.1"  # Server's IP address
-    PORT = 8080
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
-        print("Connected to Server")
-        command = json.dumps({"type": "update","ID": "Voltarium", "data": new_state}).encode('utf-8')
-        s.sendall(command)
-        print("Data sent")
-
-        #s.close()
+        self.Voltarium = Voltarium
+        self.host = host
+        self.port = port
         
-class PowerDistributionManager:
+        self.socket = None
+
+        # Connect to the server on initialization
+        self.connect_to_server()
+
+        # Start a thread to listen for incoming messages
+        self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+        self.listener_thread.start()
+        
+
+    def connect_to_server(self):
+        """Establish a connection to the server."""
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.socket.connect((self.host, self.port))
+            print("Connected to server")
+        except Exception as e:
+            print("Error connecting to server:", e)
+            self.socket = None
+
+    def listen_for_messages(self):
+        """Continuously listens for messages from the server and passes them to the display."""
+        if self.socket is None:
+            print("Not connected to the server.")
+            return
+
+        try:
+            while True:
+                data = self.socket.recv(1024)
+                if not data:
+                    print("Server disconnected.")
+                    break
+                # Decode the message and pass it to the display
+                message = json.loads(data.decode('utf-8'))
+                print("Recieved: ", message)
+                
+                self.Voltarium.input_power = float(message)
+                
+                
+        except Exception as e:
+            print("Error receiving data:", e)
+        finally:
+            self.socket.close()
+
+    def send(self, Message):
+        """Send a command to the server with optional data."""
+        if self.socket is None:
+            print("Not connected to the server.")
+            return
+
+        # Prepare the command to send
+        command_json = json.dumps(Message).encode('utf-8')
+
+        try:
+            self.socket.sendall(command_json)
+            
+        except Exception as e:
+            print("Error sending data:", e)
+
+
+
+
+        
+class Voltarium:
     
     def __init__(self, input_power=4):
         self.input_power = input_power  # Total input power in MW
-
+        self.running = threading.Event()  # Use an Event object for thread-safe signaling
+        self.running.set()  # Initially set to True to allow the timer to run
         # Subsystems and their initial percentages (representing resistances)
         self.subsystems = {
             'Engine': 0.5,           # 25%
@@ -74,9 +116,32 @@ class PowerDistributionManager:
         keyboard.on_press_key('+', self.on_up_event)
         keyboard.on_press_key('-', self.on_down_event)
 
+        # Start the Server Stuff
+        self.client = Client("127.0.0.1", 8080,self)
+        self.client.send({"ID": "Voltarium", "request": "Initialize"})
+        time.sleep(3)
+        self.client.send({"ID": "Voltarium", "request": "get"})
+        threading.Timer(3, self.send_distribution).start()
+        
+    def send_distribution(self):
+        if not self.running.is_set():
+            return  # Stop if the running flag is cleared
+        power_engine = manager.get_actual_power()["Engine"]
+        power_sensorium = manager.get_actual_power()["Sensorium"]
+        power_amarium = manager.get_actual_power()["Amarium"]
+        new_distribution = {"Engine": power_engine,"Sensorium": power_sensorium, "Amarium": power_amarium}
+        
+        self.client.send({"ID": "Voltarium", "request": "update", "data": new_distribution} )
+        
+        threading.Timer(3, self.send_distribution).start()
+
+    
     def on_tab_event(self, event):
         """Move to the next subsystem."""
         self.selected_subsystem_idx = (self.selected_subsystem_idx + 1) % len(self.subsystem_names)
+    def on_close(self,event):
+         
+        self.running.clear()
 
     def on_up_event(self, event):
         """Increase the percentage of the selected subsystem."""
@@ -148,30 +213,7 @@ class PowerDistributionManager:
 
         return self.texts  # Return the list of text objects for blitting
 
-running = True
-game_state = {"Engine": 3,"Sensorium": 3, "Amarium": 3}
 
-def update_power_distribuion():
-    
-    global running 
-    current_distribution = get_game_state()
-    print(current_distribution)
-    manager.input_power = sum(current_distribution[0].values())
-
-    power_engine = manager.get_actual_power()["Engine"]
-    power_sensorium = manager.get_actual_power()["Sensorium"]
-    power_amarium = manager.get_actual_power()["Amarium"]
-    new_distribution = {"Engine": power_engine,"Sensorium": power_sensorium, "Amarium": power_amarium}
-
-    update_game_state(new_distribution)  
-
-    if running == True:
-         threading.Timer(1, update_power_distribuion).start()
-
-manager = PowerDistributionManager(9)
-
-threading.Timer(1, update_power_distribuion).start()
-
-
+manager = Voltarium(3)
 ani = FuncAnimation(manager.fig, manager.update_display, frames=100, blit=True, interval=100)
 plt.show()

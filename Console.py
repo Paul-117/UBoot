@@ -1,69 +1,77 @@
 import tkinter as tk
 from tkinter import ttk
-import time
-import random
-
 import socket
 import json
 import threading
 import time
 
-def listen_for_messages(s):
-    """Thread function to continuously listen for messages from the server."""
-    try:
-        while True:
-            # Receiving messages from the server
-            data = s.recv(1024)
-            if not data:
-                print("Server disconnected.")
-                break
-            # Decode and print the message from the server
-            message = json.loads(data.decode('utf-8'))
-            print("Message from server:", message)
-    except Exception as e:
-        print("Error receiving data:", e)
-    finally:
-        s.close()
 
-def client_program():
-    HOST = "127.0.0.1"  # Server's IP address
-    PORT = 8080
+class Client:
+    """Class to handle client connection, message listening, and message sending."""
+    def __init__(self, host, port, display):
+        self.host = host
+        self.port = port
+        self.display = display
+        self.socket = None
 
-    # Set up a persistent connection with the server
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        
+        # Connect to the server on initialization
+        self.connect_to_server()
+
+        # Start a thread to listen for incoming messages
+        self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+        self.listener_thread.start()
+        self.send("Initialize: Console")
+
+    def connect_to_server(self):
+        """Establish a connection to the server."""
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            s.connect((HOST, PORT))
+            self.socket.connect((self.host, self.port))
             print("Connected to server")
-
-            # Start a separate thread to listen for incoming messages
-            threading.Thread(target=listen_for_messages, args=(s,)).start()
-
-            # Main loop to send commands to the server
-            while True:
-                # Example of sending a 'get' command to retrieve the game state
-                command_type = input("Enter command type ('get' or 'update'): ")
-                if command_type == "get":
-                    command = json.dumps({"type": "get", "ID": "Voltarium"}).encode('utf-8')
-                    s.sendall(command)
-                elif command_type == "update":
-                    # Example 'new_state' to send
-                    new_state = {"score": 100, "level": 2}
-                    command = json.dumps({"type": "update", "ID": "Voltarium", "data": new_state}).encode('utf-8')
-                    s.sendall(command)
-                else:
-                    print("Invalid command. Please enter 'get' or 'update'.")
-
-                # Small delay to avoid flooding the server with requests
-                time.sleep(0.5)
-
         except Exception as e:
-            print("Error connecting to the server:", e)
+            print("Error connecting to server:", e)
+            self.socket = None
 
-# Run the client program
-client_program()
+    def listen_for_messages(self):
+        """Continuously listens for messages from the server and passes them to the display."""
+        if self.socket is None:
+            print("Not connected to the server.")
+            return
+
+        try:
+            while True:
+                data = self.socket.recv(1024)
+                if not data:
+                    print("Server disconnected.")
+                    break
+                # Decode the message and pass it to the display
+                message = json.loads(data.decode('utf-8'))
+                self.display.show_message(message)
+        except Exception as e:
+            print("Error receiving data:", e)
+        finally:
+            self.socket.close()
+
+    def send(self, Message):
+        """Send a command to the server with optional data."""
+        if self.socket is None:
+            print("Not connected to the server.")
+            return
+
+        # Prepare the command to send
+        command_json = json.dumps(Message).encode('utf-8')
+
+        try:
+            self.socket.sendall(command_json)
+            
+        except Exception as e:
+            print("Error sending data:", e)
+
+
+
 
 class RetroConsole(tk.Tk):
+    
     def __init__(self):
         super().__init__()
         self.title("Retro Console with Tabs")
@@ -89,31 +97,28 @@ class RetroConsole(tk.Tk):
         self.notebook.pack(padx=2, pady=2, fill="both", expand=True)
 
         # Initialize tabs
-        self.info_tab = self.create_tab("Info")
-        self.others_tab = self.create_tab("Others")
-        self.message_tab = self.create_tab("Message")
-        self.test_tab = self.create_tab("Test")
+        self.Story_tab = self.create_tab("Story")
+        self.Located_Ships_tab = self.create_tab("Located Ships")
+        self.Test_tab = self.create_tab("Test")
 
         # Set default tab
-        self.notebook.select(self.message_tab)
+        self.notebook.select(self.Story_tab)
         
         # Key bindings for tab switching
-        self.bind("i", lambda event: self.show_tab("Info"))
-        self.bind("e", lambda event: self.show_tab("Others"))
-        self.bind("m", lambda event: self.show_tab("Message"))
+        self.bind("s", lambda event: self.show_tab("Story"))
+        self.bind("l", lambda event: self.show_tab("Located Ships"))
         self.bind("t", lambda event: self.show_tab("Test"))
 
         # Display initial info
-        self.update_info_tab()
-        self.update_others_tab()
+        self.update_Story_tab("Lore.txt", delay=0.1)  # Ensure delay is a float
+        self.update_Located_Ships_tab()
         self.update_test_tab()
 
         # Set a recurring task to update positions
         self.after(1000, self.update_positions)  # Update positions every second
 
         # Display typing effect text on Message tab from a file
-        self.type_text_on_message("Lore.txt", delay=0.1)  # Ensure delay is a float
-
+        
     def create_tab(self, title):
         """Creates a tab with a retro-styled Text widget."""
         frame = ttk.Frame(self.notebook, style="TFrame")
@@ -130,14 +135,13 @@ class RetroConsole(tk.Tk):
 
     def show_tab(self, title):
         """Switches to the specified tab by title."""
-        if title == "Info":
-            self.notebook.select(self.info_tab)
-        elif title == "Others":
-            self.notebook.select(self.others_tab)
-        elif title == "Message":
-            self.notebook.select(self.message_tab)
+        if title == "Story":
+            self.notebook.select(self.Story_tab)
+        elif title == "Located Ships":
+            self.notebook.select(self.Located_Ships_tab)
         elif title == "Test":
-            self.notebook.select(self.test_tab)
+            self.notebook.select(self.Test_tab)
+
 
     def create_ship_data(self):
         """Creates a list of dictionaries containing ship data."""
@@ -180,26 +184,14 @@ class RetroConsole(tk.Tk):
             },
         ]
 
-    def update_info_tab(self):
-        """Updates the Info tab with current position."""
-        self.x += 1  # Increment your x-position for demo purposes
-        self.y += 1  # Increment your y-position for demo purposes
+    def update_Located_Ships_tab(self):
         
         # Update text widget
-        info_text = getattr(self, "info_text")
-        info_text.config(state="normal")
-        info_text.delete(1.0, "end")  # Clear previous text
-        info_text.insert("end", "--- Info Tab ---\n")
-        info_text.insert("end", f"Your Position: x={self.x}, y={self.y}\n")
-        info_text.config(state="disabled")  # Make read-only
-
-    def update_others_tab(self):
-        """Updates the Others tab with detected ship information."""
-        # Update text widget
-        others_text = getattr(self, "others_text")
+        others_text = getattr(self, "located ships_text")
         others_text.config(state="normal")
         others_text.delete(1.0, "end")  # Clear previous text
         others_text.insert("end", "--- Detected Ships ---\n")
+        
         
         # Display each ship's information
         for i, ship in enumerate(self.detected_ships, start=1):
@@ -215,9 +207,9 @@ class RetroConsole(tk.Tk):
         
         others_text.config(state="disabled")  # Make read-only
 
-    def type_text_on_message(self, filepath, delay=0.1):
+    def update_Story_tab(self, filepath, delay=0.1):
         """Types text from a file one letter at a time on the Message tab."""
-        message_text = getattr(self, "message_text")
+        message_text = getattr(self, "story_text")
         message_text.config(state="normal")  # Enable writing
 
         # Clear previous text
@@ -255,15 +247,9 @@ class RetroConsole(tk.Tk):
         
         test_text.config(state="disabled")  # Make read-only
 
-    def update_positions(self):
-        """Updates positions and refreshes both tabs."""
-        self.update_info_tab()
-        self.update_others_tab()
-        self.update_test_tab()
-        # Schedule the next update
-        self.after(1000, self.update_positions)
 
-# Run the application
-if __name__ == "__main__":
-    app = RetroConsole()
-    app.mainloop()
+
+Display = RetroConsole()
+client = Client("127.0.0.1", 8080, Display)
+
+Display.mainloop()

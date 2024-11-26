@@ -2,14 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Constants
-velocities = [1,2,3]  # Speed of the ship in m/s
+velocities = [2.5]  # Speed of the ship in m/s
 rudder_angles = np.arange(-180, 180, 45)  # Rudder positions in degrees
-T = 60  # Time to complete a 180-degree turn in seconds
+T = 100  # Time to complete a 180-degree turn in seconds
 circle_radius = 50
 circles = [(30, 70),(-30,100)]
 
 # Time array
-t = np.linspace(0, 40, num=100)  # Time from 0 to T seconds
+t = np.linspace(0, 30, num=100)  # Time from 0 to T seconds
 t2 = 30
 # Initial position of the ship
 x0, y0 = 0, 0

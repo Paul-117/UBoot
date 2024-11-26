@@ -29,11 +29,12 @@ except:
 class Server:
 
     """Class to handle server functions including client connections, receiving and sending messages."""
-    def __init__(self, host, port, display):
+    def __init__(self, host, port, Controler):
         self.host = host
         self.port = port
-        self.display = display
+        self.Controler = Controler
         self.connected_clients = []  # Stores (conn, addr) tuples
+        self.initialized_clients = {}
 
         # Start the server and listen for clients
         self.start_server()
@@ -70,12 +71,32 @@ class Server:
 
                 # Decode and display the message from the client
                 data = json.loads(data_raw.decode('utf-8'))
+                
+                print("Recieved: ", data)
 
-                if data == "e":
-                    pass
-                print(f"Message recieved from: {addr} : {data}",)
-                # further process the message 
+                if data["ID"] == "Voltarium":
+            
+                    if data["request"] == "get":
+                        # Client requested the game state
+                        self.send("Voltarium",3)
 
+                    elif data["request"] == "update":
+                        
+                        self.Controler.PowerDistribution = data["data"]
+                        
+                        
+
+                    elif data["request"] == "Initialize":
+
+                        for conn, client_addr in self.connected_clients:
+                            if client_addr == addr:
+                                try:
+                                    self.initialized_clients[data["ID"]] = conn
+                                    print(data["ID"], "Initialized")
+
+                                except BrokenPipeError:
+                                    print(f"Connection with {addr} lost while sending message.")
+        
         except ConnectionResetError:
             print(f"Connection with {addr} was reset.")
         finally:
@@ -83,32 +104,17 @@ class Server:
             self.connected_clients.remove((conn, addr))
             conn.close()
 
-    def send_message_to_client(self, addr, message):
-        """Send a custom message to a specific client by address."""
-        # Find the connection for the given address
-        for conn, client_addr in self.connected_clients:
-            if client_addr == addr:
-                try:
-                    response = json.dumps(message).encode('utf-8')
-                    conn.sendall(response)
-                    print(f"Sent message to {addr}: {message}")
-                except BrokenPipeError:
-                    print(f"Connection with {addr} lost while sending message.")
-                break
-        else:
-            print(f"Client {addr} not found.")
+    def send(self, ID, message):
 
+        conn = self.initialized_clients[ID]
 
-
-
-
-
-
-
-
-
-
-
+        try:
+            response = json.dumps(message).encode('utf-8')
+            conn.sendall(response)
+            print(f"Sent message to {ID}: {message}")
+        except BrokenPipeError:
+            print(f"Connection with {ID} lost while sending message.")
+  
 connected_clients  = []
 def handle_client(conn, addr,Controler):
 
@@ -122,7 +128,7 @@ def handle_client(conn, addr,Controler):
     # Add new connection to the list of clients
     connected_clients.append(conn)
 
-    #print(f"Connected by {addr}")
+    
     # Unterscheidung nach IP einbauen erkennen wer sich verbunden hat und dann nur das schicken was benötigt wird. 
     # Da es erstmal nur den Sensor gibt passen wir alles auf den Sensor an 
 
@@ -149,7 +155,7 @@ def handle_client(conn, addr,Controler):
             if command["ID"] == "Infoscreen1":
 
                 data = [ship.hp,ship.x,ship.y,ship.phi,ship.ruder,ship.v*10,ship.schub,ship.cooldown]
-                print(data)
+                
                 response = json.dumps(data).encode('utf-8')
                 conn.sendall(response)
 
@@ -160,11 +166,11 @@ def handle_client(conn, addr,Controler):
                 for i in Enemys:
                         test = i.uncertaincy
                         extracted = {"Name": i.Name, "x": i.x_detected, "y": i.y_detected, 'uncertainty': i.uncertaincy}
-                        print(data)
+                        
                         data.append(extracted)
 
                        
-                print(data)
+                
                 response = json.dumps(data).encode('utf-8')
                 conn.sendall(response)
 
@@ -252,7 +258,6 @@ def broadcast_update(update_data):
             # Remove the client if sending fails
             connected_clients.remove(client)
 
-
 def Hardware_listener(Controler):
     while True:
         if ser.in_waiting > 0:
@@ -267,14 +272,13 @@ def Hardware_listener(Controler):
                 schub = np.round(float(message[6:]))
                 Controler.ship.schub = schub
                 
-
-
 class Player:
   
     def __init__(self,Controler):
         
         self.Controler = Controler
         self.gamespeed = Controler.gamespeed
+        self.PowerDistribution = Controler.PowerDistribution
         self.Image = 'data/Uboot.png'
         self.scale = (30,40)
         self.hp = 100
@@ -283,7 +287,7 @@ class Player:
         self.phi = 0
         self.ruder = 0
         self.v = 0
-        self.v_max = 3
+        self.v_max_Engine = 10 # 10m/s bei 3KW input 
         
         self.schub = 0
         self.Turret_Angle = 0 
@@ -334,9 +338,9 @@ class Player:
             if self.Torpedo_range > 0:
                 self.Torpedo_range -= 10
 
-
     def calculatePosition(self):
-
+        
+        self.v_max = (self.PowerDistribution["Engine"]/3) *self.v_max_Engine
         self.check_input()
         self.phi += 0.006*self.ruder # ~60s für 180°
         self.phi = np.round(self.phi,2)
@@ -360,7 +364,7 @@ class Player:
         self.x = np.round(self.x,3)
         self.y = np.round(self.y,3)
 
-        #print(ship.v_x,ship.v_y)
+        
         
         if self.Primary_Torpedo_cooldown > 0:
             self.Primary_Torpedo_cooldown -= 1
@@ -417,8 +421,19 @@ class Enemy:
         self.Target = 0
         self.mode = "Default"
         self.phi_soll = 0 
-        self.Torpedo_detection_radius = 200
-        self.Player_detection_radius = 100
+
+        self.v_max = 3 #m/s
+        self.P_max = 2 #kW
+        self.Detection_radius_max = 300 #
+        self.Detection_radius = 0
+        self.Torpedo_speed = 10 #m/s
+        self.Torpedo_Explosion_radius = 30 #m
+        self.Torpedo_Reload_max = 30 #s
+        self.Power_Distribution_ist = [30, 30, 30]
+        self.Power_Distribution_soll = [90, 5, 5]
+        self.Charge_Weapons = False
+        self.Torpedo_Charge = 0
+        self.TurnTime = 100 #s
         self.Sound = Controler.Enemy_Motor 
         self.Sound.play(-1)
         self.Sound.set_volume(0)
@@ -450,12 +465,12 @@ class Enemy:
         
         return angle 
         
-    def Kurs_anpassen(self):
+    def ist_an_soll_angleichen(self):
         
         # Passt phi an phi_soll an 
 
         delta_phi = (self.phi_soll - self.phi + 360) %360
-        #print(self.phi_soll, self.phi)
+        
          # Determine the shortest turn direction
         if delta_phi > 180:
             delta_phi -= 360  # Adjust for shortest turn direction
@@ -469,9 +484,27 @@ class Enemy:
         # Ensure phi is within [0, 360)
         self.phi = self.phi % 360
 
-        self.v_x = math.sin(math.radians(self.phi)) * self.v
-        self.v_y = math.cos(math.radians(self.phi)) * self.v 
-   
+
+        
+        for i,j in enumerate(self.Power_Distribution_ist):
+            
+            if j < self.Power_Distribution_soll[i]:
+                self.Power_Distribution_ist[i] +=1
+            if j > self.Power_Distribution_soll[i]:
+                self.Power_Distribution_ist[i] -=1
+       
+        if self.Charge_Weapons == True:
+            self.Torpedo_Charge += self.Power_Distribution_ist[2]*1
+
+
+        self.v = self.Power_Distribution_ist[0]*0.01*self.v_max
+
+        self.Detection_radius = self.Power_Distribution_ist[1]*8 + 60 
+        print("v: ", self.v)
+        print("self.Detection_radius", self.Detection_radius)
+        print("self.Torpedo_Charge", self.Torpedo_Charge)
+        print("self.PowerDistribution",self.Power_Distribution_ist )
+
     def initialize_Attack(self):
         
         self.mode = "Player spotted"
@@ -494,7 +527,7 @@ class Enemy:
 
         self.phi_soll = self.get_angle_towards(self.Target)
         
-        if self.Torpedo_timer == 0: # also alle 10s
+        if self.Torpedo_Charge == 10: # also alle 10s
             
             angle = self.phi_soll
             
@@ -504,7 +537,7 @@ class Enemy:
 
              
             self.fire_Torpedo(angle,range)
-            self.Torpedo_timer = 300 
+            self.Torpedo_Charge = 0 
         
         if self.chase_Timer == 0:
             
@@ -526,13 +559,13 @@ class Enemy:
                 
                     D_Object = math.sqrt((T.x - self.x) ** 2 + (T.y - self.y) ** 2)  
                     
-                    if D_Object < self.Torpedo_detection_radius:
+                    if D_Object < self.Detection_radius:
                         if T not in self.Detected_Hostile_Torpedos:
                             
                             self.Detected_Hostile_Torpedos.append(T)
                             calculate_new_course = True
                     
-                    if D_Object > self.Torpedo_detection_radius:
+                    if D_Object > self.Detection_radius:
                         if T in self.Detected_Hostile_Torpedos:
                             self.Detected_Hostile_Torpedos.remove(T)   
                             calculate_new_course = True     
@@ -556,6 +589,7 @@ class Enemy:
     def initialize_Evade(self,Torpedos):
         
         self.mode = "Evade"
+        self.Charge_Weapons = True
         Explosions = []
         if self.Torpedo_timer == 0:
             self.Torpedo_timer = 50 # fire a counter Torpedo at 300
@@ -568,22 +602,22 @@ class Enemy:
             v_T = T.v
 
             Explosion_t = T.range - T.time*T.v # gamesteps nach denen der Torpedo explodiert 
-            print(T.range, T.time, T.v)
+            
 
             Explosion_x = x_T + math.sin(math.radians(phi_T)) * v_T * Explosion_t
             Explosion_y = y_T - math.cos(math.radians(phi_T)) * v_T * Explosion_t
             
             Explosions.append((Explosion_x,Explosion_y))
-            print(Explosions)
+            
             t = Explosion_t
             
 
 
         
-        velocities = [0.1,0.2,0.3]  # Speed of the ship in m/s
+        velocities = [self.v,self.v/2]  # Speed of the ship in m/s
         angles = np.arange(-180, 180, 45)  # Rudder positions in degrees
         
-        T = 100  # Time to complete a 180-degree turn in seconds
+        
 
         distances = []
 
@@ -593,7 +627,7 @@ class Enemy:
                 for circle in Explosions:
                     delta_phi = np.radians(angle)  # Convert rudder angle to radians
                     if angle != 0:  # Avoid division by zero for zero angle
-                        omega = delta_phi / T  # Angular velocity
+                        omega = delta_phi / self.TurnTime # Angular velocity
                         R = v / omega  # Calculate turning radius
 
                         # Parametric equations for the trajectory
@@ -609,7 +643,7 @@ class Enemy:
                     distance_local += np.sqrt((x - circle[0])**2 + (y - circle[1])**2)
                     
                 # Store the exit time and angle
-                #print(angle,v, distance)
+                
                 distances.append((angle,v, distance_local))
 
         distances = np.array(distances)
@@ -625,8 +659,10 @@ class Enemy:
 
         self.mode = "Counter-Strike"
         print("Inizialising counter Attack")
-        self.v = 0.22
-        self.chase_Timer = 1200
+        self.Power_Distribution_soll = [30, 30, 30]
+        
+        self.chase_Timer = 120
+
         actual_distance = math.sqrt((math.pow(self.x - self.ship.x,2)) + (math.pow(self.y - self.ship.y,2)))
         uncertainty_factor = actual_distance/10
         
@@ -645,7 +681,7 @@ class Enemy:
     
     def counter_strike(self):
         
-        if self.Torpedo_timer == 0:
+        if self.Torpedo_Charge > 10:
             print("Launching Counter Torpedo")
 
             angle = self.get_angle_towards((self.Target[0],self.Target[1]))
@@ -654,7 +690,7 @@ class Enemy:
             range = int(350)
     
             self.fire_Torpedo(angle,range)
-            self.Torpedo_timer = 300
+            self.Torpedo_Charge = 0
 
         if self.chase_Timer == 0:
             self.initialize_default_behavior()      
@@ -665,11 +701,11 @@ class Enemy:
         # Sound anpassen 
         
         a =  max( -D_Object/1000 + 1, 0)
-        print(D_Object, a)
+        
         
 
         self.Sound.set_volume(a/4)
-        if D_Object < self.Player_detection_radius*self.ship.v*10 and self.mode != "Evade" :
+        if D_Object < self.Detection_radius*self.ship.v*10 and self.mode != "Evade" :
             self.initialize_Attack()
 
     def standard_routine(self):
@@ -681,15 +717,20 @@ class Enemy:
             
             self.check_for_Torpedos()
             self.check_for_Player()      
-            
+            self.ist_an_soll_angleichen()
+
         if self.chase_Timer > 0:
             self.chase_Timer -=1
 
         if self.Torpedo_timer > 0:
             self.Torpedo_timer -= 1
-        self.Kurs_anpassen()
-        self.x += self.v_x
-        self.y -= self.v_y
+
+        
+        
+        self.v_x = math.sin(math.radians(self.phi)) * self.v
+        self.v_y = math.cos(math.radians(self.phi)) * self.v 
+        self.x += self.v_x *0.1
+        self.y -= self.v_y *0.1
 
         if self.mode == "Counter-Strike":
             self.counter_strike()
@@ -710,6 +751,28 @@ class Enemy:
         rot_image = pygame.transform.rotate(Image, -self.phi)#rot_image = pygame.transform.rotate(Image, -instance.phi_detected)
         rot_rect = rot_image.get_rect(center = (500+(self.x-self.ship.x)/self.Controler.scale,500+(self.y-self.ship.y)/self.Controler.scale))
         screen.blit(rot_image, rot_rect) 
+
+class Voyager(Enemy):
+    
+    def __init__(self,Controler,x,y,phi):
+        super().__init__(Controler)
+        self.x = x
+        self.y = y
+        self.course = phi
+        self.mode = "Default"
+
+
+        self.v = 0.2
+        self.initialize_default_behavior()
+
+    def initialize_default_behavior(self):
+        self.mode = "Default"
+        self.v = 0.2
+        self.phi_soll = self.course
+
+    def loop(self):
+               
+        super().standard_routine()
 
 class Transport_Ship(Enemy):
     
@@ -1241,23 +1304,27 @@ class detection:
 class Dummy_Sensorium:
     
     def __init__(self,Controler):
+
         self.Enemys = Controler.Enemys
         self.Controler = Controler
         self.Player = Controler.ship
-
+        self.Power = Controler.PowerDistribution["Sensorium"]
+        self.Range_max = 1000 #m
     def ping(self):
+        
+        self.Power = self.Controler.PowerDistribution["Sensorium"]
+
         for i in self.Enemys:
 
             distance = math.sqrt((math.pow(self.Player.x - i.x,2)) + (math.pow(self.Player.y - i.y,2)))
-            Sigma = 0.1*distance/(2*self.Controler.PowerDistribution["Sensorium"]+0.1)
-            I = np.maximum(200 - 0.2*distance/(1.5*(self.Controler.PowerDistribution["Sensorium"]+0.1)), 0)
+            Sigma = 0.1*distance/(2*self.Power+0.1)
+            I = np.maximum(200 - 0.2*distance/(1.5*(self.Power+0.1)), 0)
             
             x = np.random.normal(i.x, Sigma)
             y = np.random.normal(i.y, Sigma)
 
             new = detection(self.Controler, x,y,5,I)
             self.Controler.Detections.append(new)
-
 
 class GameControler:
   
@@ -1304,6 +1371,10 @@ class GameControler:
         self.time = 0 
         self.clock = pygame.time.Clock()
 
+        # Power distribution: 
+
+        self.PowerDistribution = {"Engine": 3,"Sensorium": 0, "Amarium": 0}
+
         #Game Entities
         self.ship = Player(self)
         
@@ -1315,10 +1386,8 @@ class GameControler:
         self.Enemys = []
 
 
-        # Power distribution: 
 
-        self.PowerDistribution = {"Engine": 1,"Sensorium": 2, "Amarium": 0}
-        self.ship.v_max += self.PowerDistribution["Engine"]
+        
         # Define Sectors: 
         # Sector 1:
         self.sector_1 = [[-500,500],[-300,-2000]]
@@ -1332,7 +1401,10 @@ class GameControler:
         self.Dummy_Sensorium = Dummy_Sensorium(self)
         threading.Thread(target=Hardware_listener, args=(self,), daemon=True).start()
         #self.add_Patrol_Ship()
-        self.Level_2()
+        timer = threading.Timer(1, self.Level_1)
+        timer.start()
+
+        
         self.run()
 
         
@@ -1391,15 +1463,15 @@ class GameControler:
         
         # Generate a random angle between 0 and 2π radians
         angle = random.uniform(0, 2 * math.pi)
-        course = random.uniform(0,360)
+        course = int(random.uniform(0,360))
         # Calculate the new coordinates
-        x = self.ship.x + distance * math.cos(angle)
-        y = self.ship.y + distance * math.sin(angle)
+        x = int(self.ship.x + distance * math.cos(angle))
+        y = int(self.ship.y + distance * math.sin(angle))
 
         for i in range(n):
             transporter = Transport_Ship(self,x+i*100,y,course)
                   
-        return transporter
+        return transporter, x,y, course
     
     def add_Patrol_Ship(self):
 
@@ -1615,8 +1687,13 @@ class GameControler:
     
     def Level_1(self):
         self.Level += 1
-        ship = self.add_Transport_Ship(1)
-
+        n = 1
+        ship, x,y, course = self.add_Transport_Ship(n)
+        print(f"Level 1 started: {n} ships, course {course}, last seen at {x,y}")
+        if "Console" in self.server.initialized_clients:
+            message = n,course,x,y
+            self.server.send("Console",message)
+        
     def Level_2(self):
         print("Level 2")
         self.Level += 1
@@ -1628,7 +1705,7 @@ class GameControler:
         while self.running:
 
             # Sounds
-            a = self.ship.v*10/self.ship.v_max
+            a = self.ship.v*10/self.ship.v_max_Engine
             b = max(0.3,a)
             self.Background_Bubbles.set_volume(b)
 
@@ -1644,8 +1721,8 @@ class GameControler:
             self.infoscreen()
             
             # Take care of the Level stuff
-            if self.Enemys == []:
-                self.next_Level()
+            #if self.Enemys == []:
+                #self.next_Level()
             #self.spawn_enemys()
 
             self.ship.calculatePosition()
@@ -1688,7 +1765,6 @@ class GameControler:
                 print("Time Passed: ", self.time/10)
             self.clock.tick(10 * self.gamespeed)  # 10 FPS multiplied by the gamespeed factor
         
-
 # Start the Controler in a separate thread
 controler = GameControler()
 
@@ -1698,8 +1774,11 @@ controler_thread.start()
 
 #
 
-
-
+Torpedo_Arsenal = ["Barracuda", "Strider", "Stingray", "Aquabuster", "Vortex", "Devestator"]
+Engines = [""]
+Hydrophones = [""]
+Ship_Names = ["Tide Runner", "M17 Voyager", "K35 Ocean Scout", "  k47 Sentinals", "L57 ARMA-Guardian", "Infiltrator" ]
+Ship_Classes = ["Light, Medium, Heavy Cruiser", "Destroyer", "Dreadnought", "Interceptor", "Assault Frigatte", "Corvette", "Carrier"]
 
 
 

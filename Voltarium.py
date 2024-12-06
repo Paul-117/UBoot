@@ -89,8 +89,8 @@ class Voltarium:
     
     def __init__(self, input_power=4):
         self.input_power = input_power  # Total input power in MW
-        self.running = threading.Event()  # Use an Event object for thread-safe signaling
-        self.running.set()  # Initially set to True to allow the timer to run
+        self.running = True  
+        
         # Subsystems and their initial percentages (representing resistances)
         self.subsystems = {
             'Engine': 0.5,           # 25%
@@ -121,27 +121,29 @@ class Voltarium:
         self.client.send({"ID": "Voltarium", "request": "Initialize"})
         time.sleep(3)
         self.client.send({"ID": "Voltarium", "request": "get"})
-        threading.Timer(3, self.send_distribution).start()
+        self.thread = threading.Thread(target=self.send_distribution_loop, daemon=True)
+        self.thread.start()
         
-    def send_distribution(self):
-        if not self.running.is_set():
-            return  # Stop if the running flag is cleared
-        power_engine = manager.get_actual_power()["Engine"]
-        power_sensorium = manager.get_actual_power()["Sensorium"]
-        power_amarium = manager.get_actual_power()["Amarium"]
-        new_distribution = {"Engine": power_engine,"Sensorium": power_sensorium, "Amarium": power_amarium}
-        
-        self.client.send({"ID": "Voltarium", "request": "update", "data": new_distribution} )
-        
-        threading.Timer(3, self.send_distribution).start()
 
+    def send_distribution_loop(self):
+        while self.running:
+            power_engine = self.get_actual_power()["Engine"]
+            power_sensorium = self.get_actual_power()["Sensorium"]
+            power_amarium = self.get_actual_power()["Amarium"]
+            new_distribution = {
+                "Engine": power_engine,
+                "Sensorium": power_sensorium,
+                "Amarium": power_amarium,
+            }
+            self.client.send({"ID": "Voltarium", "request": "update", "data": new_distribution})
+            time.sleep(3)  # Pause for 3 seconds before the next send
     
     def on_tab_event(self, event):
         """Move to the next subsystem."""
         self.selected_subsystem_idx = (self.selected_subsystem_idx + 1) % len(self.subsystem_names)
     def on_close(self,event):
          
-        self.running.clear()
+        self.running = False
 
     def on_up_event(self, event):
         """Increase the percentage of the selected subsystem."""

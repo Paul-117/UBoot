@@ -1,17 +1,21 @@
 import tkinter as tk
 from tkinter import ttk
+import pickle
 import socket
 import json
 import threading
 import time
+from Bridge import Player
 
 
 class Client:
     """Class to handle client connection, message listening, and message sending."""
-    def __init__(self, host, port, display):
+    def __init__(self, host, port,Console):
+
+        self.Console = Console
         self.host = host
         self.port = port
-        self.display = display
+        
         self.socket = None
 
         # Connect to the server on initialization
@@ -20,7 +24,7 @@ class Client:
         # Start a thread to listen for incoming messages
         self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
         self.listener_thread.start()
-        self.send("Initialize: Console")
+        
 
     def connect_to_server(self):
         """Establish a connection to the server."""
@@ -40,13 +44,15 @@ class Client:
 
         try:
             while True:
+                
                 data = self.socket.recv(1024)
                 if not data:
                     print("Server disconnected.")
                     break
                 # Decode the message and pass it to the display
                 message = json.loads(data.decode('utf-8'))
-                self.display.show_message(message)
+                print("Recieved: ", message)
+                               
         except Exception as e:
             print("Error receiving data:", e)
         finally:
@@ -66,6 +72,7 @@ class Client:
             
         except Exception as e:
             print("Error sending data:", e)
+
 
 
 
@@ -249,7 +256,23 @@ class RetroConsole(tk.Tk):
 
 
 
-Display = RetroConsole()
-client = Client("127.0.0.1", 8080, Display)
+#Display = RetroConsole()
+Console = 5
+client = Client("127.0.0.1", 8080, Console)
 
-Display.mainloop()
+#Display.mainloop()
+
+def ini():
+    
+    client.send({"ID": "Console", "request": "Initialize"})
+    time.sleep(3)
+    client.send({"ID": "Console", "request": "get"})
+
+ini()
+
+i = 0
+while True:
+    i +=1 
+    print(i)
+    time.sleep(1)
+    

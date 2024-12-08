@@ -52,6 +52,7 @@ class Client:
                 # Decode the message and pass it to the display
                 message = json.loads(data.decode('utf-8'))
                 print("Recieved: ", message)
+                self.Console.process(message)
                                
         except Exception as e:
             print("Error receiving data:", e)
@@ -87,7 +88,6 @@ class RetroConsole(tk.Tk):
         # Initialize position variables
         self.x, self.y = 0, 0  # Your position
         self.others_positions = []  # Positions of others
-        self.detected_ships = self.create_ship_data()  # Create ship data
 
         # Configure custom style for tabs
         style = ttk.Style(self)
@@ -105,27 +105,25 @@ class RetroConsole(tk.Tk):
 
         # Initialize tabs
         self.Story_tab = self.create_tab("Story")
-        self.Located_Ships_tab = self.create_tab("Located Ships")
+        self.Story_tab = self.create_tab("Self")
+        self.Located_Ships_tab = self.create_tab("Located_Ships")
         self.Test_tab = self.create_tab("Test")
 
         # Set default tab
         self.notebook.select(self.Story_tab)
-        
-        # Key bindings for tab switching
-        self.bind("s", lambda event: self.show_tab("Story"))
-        self.bind("l", lambda event: self.show_tab("Located Ships"))
-        self.bind("t", lambda event: self.show_tab("Test"))
 
-        # Display initial info
+        # Display initial info AFTER tabs are created
         self.update_Story_tab("Lore.txt", delay=0.1)  # Ensure delay is a float
-        self.update_Located_Ships_tab()
+        self.update_Located_Ships_tab([{"Ships": "None"}])  
+        self.update_Self_tab({"Ships": "None"})
         self.update_test_tab()
 
-        # Set a recurring task to update positions
-        self.after(1000, self.update_positions)  # Update positions every second
+        # Server stuff
+        client = Client("127.0.0.1", 8080, self)
+        client.send({"ID": "Console", "request": "Initialize"})
+        time.sleep(3)
+        client.send({"ID": "Console", "request": "get"})
 
-        # Display typing effect text on Message tab from a file
-        
     def create_tab(self, title):
         """Creates a tab with a retro-styled Text widget."""
         frame = ttk.Frame(self.notebook, style="TFrame")
@@ -138,6 +136,7 @@ class RetroConsole(tk.Tk):
         text_widget.config(state="disabled")  # Make read-only
         
         setattr(self, f"{title.lower()}_text", text_widget)  # Dynamic attribute for text widget
+        
         return frame
 
     def show_tab(self, title):
@@ -149,70 +148,31 @@ class RetroConsole(tk.Tk):
         elif title == "Test":
             self.notebook.select(self.Test_tab)
 
+    def update_Located_Ships_tab(self, message):
 
-    def create_ship_data(self):
-        """Creates a list of dictionaries containing ship data."""
-        return [
-            {
-                "class": "Destroyer",
-                "arsenal": "Torpedoes, Guns",
-                "health": "80%",
-                "max_speed": "30 knots",
-                "agility": "High",
-                "last_known_position": "45.0N, 25.0W",
-                "course": "Northeast",
-            },
-            {
-                "class": "Cruiser",
-                "arsenal": "Missiles, CIWS",
-                "health": "70%",
-                "max_speed": "28 knots",
-                "agility": "Medium",
-                "last_known_position": "44.0N, 26.0W",
-                "course": "East",
-            },
-            {
-                "class": "Battleship",
-                "arsenal": "Heavy Guns, Missiles",
-                "health": "60%",
-                "max_speed": "25 knots",
-                "agility": "Low",
-                "last_known_position": "43.0N, 27.0W",
-                "course": "Southeast",
-            },
-            {
-                "class": "Submarine",
-                "arsenal": "Torpedoes",
-                "health": "90%",
-                "max_speed": "20 knots",
-                "agility": "Very High",
-                "last_known_position": "46.0N, 24.0W",
-                "course": "West",
-            },
-        ]
+        located_ships_text = getattr(self, "located_ships_text")  # Access the text widget for this tab
+        located_ships_text.config(state="normal")  # Enable writing
+        located_ships_text.delete(1.0, "end")  # Clear previous text
+        
+        # Add header
+        located_ships_text.insert("end", "--- Detected Ships ---\n")
+        print("Penis", message)
+        # Display information for each ship
+        for i, ship in enumerate(message, start=1):
 
-    def update_Located_Ships_tab(self):
+            located_ships_text.insert("end", f"Ship {i}:\n")
+            
+            # Iterate through each key-value pair in the ship dictionary
+            for key, value in ship.items():
+                # Format and display each key-value pair with tab alignment
+                key_column_width = 15  # Define a fixed width for the key column
+                formatted_key = f"{key}:".ljust(key_column_width)  # Ensure uniform width
+                located_ships_text.insert("end", f"  {formatted_key}{value}\n")
+            
+            located_ships_text.insert("end", "------------------------\n")
         
-        # Update text widget
-        others_text = getattr(self, "located ships_text")
-        others_text.config(state="normal")
-        others_text.delete(1.0, "end")  # Clear previous text
-        others_text.insert("end", "--- Detected Ships ---\n")
-        
-        
-        # Display each ship's information
-        for i, ship in enumerate(self.detected_ships, start=1):
-            others_text.insert("end", f"Ship {i}:\n")
-            others_text.insert("end", f"  Class: {ship['class']}\n")
-            others_text.insert("end", f"  Arsenal: {ship['arsenal']}\n")
-            others_text.insert("end", f"  Health: {ship['health']}\n")
-            others_text.insert("end", f"  Max Speed: {ship['max_speed']}\n")
-            others_text.insert("end", f"  Agility: {ship['agility']}\n")
-            others_text.insert("end", f"  Last Known Position: {ship['last_known_position']}\n")
-            others_text.insert("end", f"  Course: {ship['course']}\n")
-            others_text.insert("end", "------------------------\n")
-        
-        others_text.config(state="disabled")  # Make read-only
+        # Disable text widget to make it read-only
+        located_ships_text.config(state="disabled")
 
     def update_Story_tab(self, filepath, delay=0.1):
         """Types text from a file one letter at a time on the Message tab."""
@@ -243,6 +203,7 @@ class RetroConsole(tk.Tk):
             message_text.config(state="disabled")  # Make read-only once done
 
     def update_test_tab(self):
+
         """Updates the Test tab."""
         # Update text widget
         test_text = getattr(self, "test_text")
@@ -253,26 +214,39 @@ class RetroConsole(tk.Tk):
         test_text.insert("end", "This is a test message.\n")
         
         test_text.config(state="disabled")  # Make read-only
-
-
-
-#Display = RetroConsole()
-Console = 5
-client = Client("127.0.0.1", 8080, Console)
-
-#Display.mainloop()
-
-def ini():
     
-    client.send({"ID": "Console", "request": "Initialize"})
-    time.sleep(3)
-    client.send({"ID": "Console", "request": "get"})
+    def update_Self_tab(self,message):
 
-ini()
+        print("Penis",message)
+        """Updates the Test tab."""
+        # Update text widget
+        self_text = getattr(self, "self_text")
+        self_text.config(state="normal")
+        self_text.delete(1.0, "end")  # Clear previous text
 
-i = 0
-while True:
-    i +=1 
-    print(i)
-    time.sleep(1)
+        self_text.insert("end", "--- Self Tab ---\n")
+        self_text.insert("end", "This is a test message.\n")
+        
+        for key, value in message.items():
+                # Format and display each key-value pair with tab alignment
+                key_column_width = 15  # Define a fixed width for the key column
+                formatted_key = f"{key}:".ljust(key_column_width)  # Ensure uniform width
+                self_text.insert("end", f"  {formatted_key}{value}\n")
+
+
+        self_text.config(state="disabled")  # Make read-only
+
+    def process(self,message):
+        
+        self.update_Self_tab(message[0])
+        self.update_Located_Ships_tab(message[1:])
+
+
+
+
+Display = RetroConsole()
+
+Display.mainloop()
+
+
     

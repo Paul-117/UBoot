@@ -132,10 +132,7 @@ class Server:
             conn.sendall(response)
             print(f"Sent message to {ID}: {message}")
         except BrokenPipeError:
-            print(f"Connection with {ID} lost while sending message.")
-    
-    
-  
+            print(f"Connection with {ID} lost while sending message.") 
 
 def handle_client(conn, addr,Controler):
 
@@ -442,13 +439,11 @@ class Player:
             "Reactor": self.Reactor.Name,
             "Arsenal": self.Arsenal.Name,
             "Engine" : self.Engine.Name,
-            "Position": (self.x, self.y),
-            "Course" : self.phi          
+            "Position": (round(self.x), round(self.y)),
+            "Course" : f"{round(self.phi)}°"          
         }
 
         return export
-
-
 
 class Enemy:
   
@@ -490,8 +485,6 @@ class Enemy:
         self.Torpedo_timer = 0
         Controler.Enemys.append(self)
         
-        
-   
     def get_angle_towards(self,P):
         
         x = self.x       # Target ship x position
@@ -802,8 +795,8 @@ class Enemy:
             "Reactor": self.Reactor.Name,
             "Arsenal": self.Arsenal.Name,
             "Engine" : self.Engine,
-            "Position": (self.x, self.y),
-            "Course" : self.phi          
+            "Position": (round(self.x), round(self.y)),
+            "Course" : f"{round(self.phi)}°"             
         }
 
         return export
@@ -1782,7 +1775,14 @@ class GameControler:
             func()  # Call the function if it exists
         else:
             print(f"No such function: {func_name}")
-    
+
+        message = []
+        message.append(self.ship.export_to_dict())
+        for i in self.Enemys:
+            message.append(i.export_to_dict())
+
+        self.server.send("Console",message)
+
     def Level_1(self):
         self.Level += 1
         n = 1
@@ -1798,8 +1798,7 @@ class GameControler:
         print("Level 2")
         self.Level += 1
         ship = self.add_Transport_Ship(2)
-
-    
+ 
     def run(self):
 
         while self.running:

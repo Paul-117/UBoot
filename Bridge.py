@@ -8,6 +8,9 @@ import random
 import math
 import serial
 import os
+import multiprocessing
+import sys 
+import inspect
 
 from abc import ABC, abstractmethod
 # V Schiff = 5m/s
@@ -313,7 +316,7 @@ class Player:
         
         self.Reactor = SK36_Stphenson_Reaktor()
 
-        self.PowerDistribution = {"Engine": self.Reactor.Output/3,"Sensorium": self.Reactor.Output/3, "Amarium": self.Reactor.Output/3}
+        self.PowerDistribution = {"Engine": self.Reactor.Output/2,"Sensorium": self.Reactor.Output/4, "Amarium": self.Reactor.Output/4}
         
         self.Arsenal = Baracuda_Torpedos()
         self.Engine = Aquafine(self)
@@ -323,9 +326,6 @@ class Player:
         self.Primary_Torpedo_Charge = 0
         self.Torpedo_range = 200
 
-        
-        Controler.PowerDistribution = {"Engine": self.Reactor.Output/3,"Sensorium": self.Reactor.Output/3, "Amarium": self.Reactor.Output/3}
-        
     def check_input(self):
         keys = pygame.key.get_pressed()  # Checking pressed keys
 
@@ -536,6 +536,9 @@ class Enemy:
        
         if self.Charge_Weapons == True:
             self.Torpedo_Charge += self.Power_Distribution_ist[2]*0.01*self.Reactor.Output
+        else:
+            if self.Torpedo_Charge > 0:
+                self.Torpedo_Charge -= 1
 
 
         self.v = self.Power_Distribution_ist[0]*0.01*self.v_max
@@ -546,14 +549,12 @@ class Enemy:
         
         self.mode = "Player spotted"
         self.Power_Distribution_soll = [30, 30, 30]
-        
+        self.Charge_Weapons = True
         self.Target = (self.ship.x,self.ship.y)
         
         # reset the chase timer 
-        self.chase_Timer = 500 
-        # start the Torpedo Timer 
-        if self.Torpedo_timer == 0:
-            self.Torpedo_timer = 100
+        self.chase_Timer = 120 
+
         # later insert call other ships 
         print("Player Spotted at ", self.Target, "initializing Attak")
         for enemy in self.Controler.Enemys:
@@ -581,7 +582,7 @@ class Enemy:
     def fire_Torpedo(self,angle, range):
            
         Torpedo(self.Controler,self.Arsenal,"Enemy", self.x, self.y, angle, self.Arsenal.v, range)
-        self.Primary_Torpedo_Charge = 0
+        self.Torpedo_Charge = 0
 
     def check_for_Torpedos(self):
         
@@ -627,8 +628,6 @@ class Enemy:
         self.mode = "Evade"
         self.Charge_Weapons = True
         Explosions = []
-        if self.Torpedo_timer == 0:
-            self.Torpedo_timer = 50 # fire a counter Torpedo at 300
         
         for T in Torpedos:
         # Define the torpedo's position and heading
@@ -695,7 +694,7 @@ class Enemy:
 
         self.Charge_Weapons = True
         self.mode = "Counter-Strike"
-        print("Inizialising counter Attack")
+        
         self.Power_Distribution_soll = [30, 30, 30]
         
         self.chase_Timer = 120
@@ -738,7 +737,7 @@ class Enemy:
         a =  max( -D_Object/1000 + 1, 0)       
         self.Sound.set_volume(a/4)
 
-        if D_Object < self.Detection_radius*self.ship.v*10 and self.mode != "Evade" :
+        if D_Object < self.Detection_radius and self.mode != "Evade" :
             self.initialize_Attack()
 
     def standard_routine(self):
@@ -751,15 +750,10 @@ class Enemy:
             self.check_for_Torpedos()
             self.check_for_Player()      
             self.ist_an_soll_angleichen()
+            if self.chase_Timer > 0:
+                self.chase_Timer -=1
+      
 
-        if self.chase_Timer > 0:
-            self.chase_Timer -=1
-
-        if self.Torpedo_timer > 0:
-            self.Torpedo_timer -= 1
-
-        
-        
         self.v_x = math.sin(math.radians(self.phi)) * self.v
         self.v_y = math.cos(math.radians(self.phi)) * self.v 
         self.x += self.v_x *0.1
@@ -829,6 +823,8 @@ class Voyager(Enemy):
         self.mode = "Default"
         self.v = 0.2
         self.phi_soll = self.course
+        self.Power_Distribution_soll = [90, 5, 5]
+        self.Charge_Weapons = False
 
     def loop(self):
                
@@ -1398,11 +1394,11 @@ class Dummy_Sensorium:
         self.Enemys = Controler.Enemys
         self.Controler = Controler
         self.Player = Controler.ship
-        self.Power = Controler.PowerDistribution["Sensorium"]
+        self.Power = self.Player.PowerDistribution["Sensorium"]
         self.Range_max = 1000 #m
     def ping(self):
         
-        self.Power = self.Controler.PowerDistribution["Sensorium"]
+        self.Power = self.Player.PowerDistribution["Sensorium"]
 
         for i in self.Enemys:
 
@@ -1438,11 +1434,7 @@ class GameControler:
         self.Motor.play(-1)
         self.Background_Bubbles.set_volume(0)
         self.Torpedo_Launch.set_volume(1)
-
-        
-
-
-        
+     
         # Creating screen
         self.screen_width = 1000
         self.screen_height = 1000
@@ -1458,10 +1450,6 @@ class GameControler:
         # Clock for controlling the framerate
         self.time = 0 
         self.clock = pygame.time.Clock()
-        # Power distribution: 
-
-        
-
 
         #Game Entities
         self.ship = Player(self)
@@ -1473,18 +1461,12 @@ class GameControler:
         enemy = Enemy(self)#,P1, P2)
         self.Enemys = []
         
-
-
-
-        
         # Define Sectors: 
         # Sector 1:
         self.sector_1 = [[-500,500],[-300,-2000]]
         font_path = os.path.join('data/', 'PressStart2P-Regular.ttf')  # Example path
         self.font = pygame.font.Font(font_path, 12)  # Font size can be adjusted
 
-        
-        
         
         # Start the game loop
         self.Dummy_Sensorium = Dummy_Sensorium(self)
@@ -1495,11 +1477,14 @@ class GameControler:
 
         # Start the server 
         self.server = Server("0.0.0.0", 8080, self)
-                
+        
+        # start the Log
+        self.log = Log()
+
+
+
         self.run()
 
-        
-    
     def calculate_Points(self,D = 1000):
         sector = self.sector_1
         x1 = sector[0][0]
@@ -1858,18 +1843,82 @@ class GameControler:
                 self.Dummy_Sensorium.ping()                
             
             pygame.display.update()
+            
             self.time += 1
+            for i in self.Enemys:
+                self.log.log("Mode",i.mode)
+                self.log.log("Detection_radius",i.Detection_radius)
+                self.log.log("Power_Distribution_ist",i.Power_Distribution_ist)
+                self.log.log("Torpedo_Charge",i.Torpedo_Charge)
+                self.log.log("Velocity",i.v)
 
             if self.time%100 == 0:
                 print("Time Passed: ", self.time/10)
             self.clock.tick(10 * self.gamespeed)  # 10 FPS multiplied by the gamespeed factor
 
 
+    
+class Log:
+    def __init__(self):
+        self.queue = multiprocessing.Queue()
+        # Start the logging process only when the first log message is added
+        self.process = None
+
+    def log(self, name, value):
+        if self.process is None:
+            self.process = multiprocessing.Process(target=self._run_log_process, args=(self.queue,))
+            self.process.daemon = True  # Ensure the log process terminates with the main program
+            self.process.start()
+
+        # Send the variable name and value to the queue
+        self.queue.put({name: value})
+
+    def _run_log_process(self, queue):
+        pygame.init()
+        log_width, log_height = 400, 300
+        font_size = 20
+        screen = pygame.display.set_mode((log_width, log_height))
+        pygame.display.set_caption("Debug Log")
+        font = pygame.font.Font(None, font_size)
+        clock = pygame.time.Clock()
+
+        # Dictionary to store logged variables
+        logged_variables = {}
+
+        while True:
+            # Handle pygame events to keep the window responsive
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            # Process messages from the queue
+            while not queue.empty():
+                message = queue.get()
+                logged_variables.update(message)
+
+            # Clear the screen and render the updated logs
+            screen.fill((30, 30, 30))  # Dark background
+            y = 0
+            for name, value in logged_variables.items():
+                msg = f'{name}: {value}'
+                text_surface = font.render(msg, True, (255, 255, 255))  # White text
+                screen.blit(text_surface, (10, y))
+                y += font_size
+
+            pygame.display.flip()
+            clock.tick(30)
+
+    def terminate(self):
+        # Terminate the log process
+        if self.process is not None:
+            self.process.terminate()
+
+
 if __name__ == "__main__":
-
-    # Start the Controler in a separate thread
+    
+    # Start the GameController in another thread
     controler = GameControler()
-
     controler_thread = threading.Thread(target=controler.run)
     controler_thread.start()
 
